@@ -222,17 +222,15 @@ export function Gerador() {
                 )}
               </div>
               {results.jogos.map((jogo, i) => (
-                <div key={i} className="space-y-2">
+                <div key={i} className="flex flex-wrap items-center gap-2">
                   <GameCard numbers={jogo} index={i} />
-                  <div className="flex gap-2 ml-12">
-                    <button
-                      onClick={() => handleSimulateGame(jogo)}
-                      disabled={simLoading}
-                      className="text-xs bg-blue-700 hover:bg-blue-600 disabled:bg-gray-700 text-white px-3 py-1 rounded transition-colors"
-                    >
-                      {simLoading ? 'Simulando...' : 'Simular este jogo'}
-                    </button>
-                  </div>
+                  <button
+                    onClick={() => handleSimulateGame(jogo)}
+                    disabled={simLoading}
+                    className="text-xs bg-blue-700 hover:bg-blue-600 disabled:bg-gray-700 text-white px-3 py-1 rounded transition-colors"
+                  >
+                    {simLoading ? 'Simulando...' : 'Simular este jogo'}
+                  </button>
                 </div>
               ))}
             </div>
