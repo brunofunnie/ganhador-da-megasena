@@ -21,7 +21,7 @@ export function GameCard({ numbers, index }: GameCardProps) {
         <span className="text-xs text-gray-500 mr-1">#{index + 1}</span>
       )}
       {numbers.map((n) => (
-        <NumberBall key={n} number={n} />
+        <NumberBall key={n} number={n} size="sm" />
       ))}
       <button
         onClick={handleCopy}
