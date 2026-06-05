@@ -38,17 +38,6 @@ export interface GenerateResponse {
   jogos: string[][];
 }
 
-export interface Strategy {
-  id: string;
-  nome: string;
-  descricao: string;
-}
-
-export interface StrategyResponse {
-  estrategia: Strategy;
-  jogos: string[][];
-}
-
 export interface SimulationResponse {
   jogos: Array<{
     numeros: string[];
@@ -81,14 +70,6 @@ export function fetchGenerate(params: {
   if (params.exclude) qs.set('exclude', params.exclude);
   if (params.seeds) qs.set('seeds', params.seeds);
   return apiFetch(`/generate?${qs.toString()}`);
-}
-
-export function fetchStrategies(): Promise<Strategy[]> {
-  return apiFetch('/strategies');
-}
-
-export function fetchStrategy(id: string): Promise<StrategyResponse> {
-  return apiFetch(`/strategies/${id}`);
 }
 
 export function fetchSimulate(params: {

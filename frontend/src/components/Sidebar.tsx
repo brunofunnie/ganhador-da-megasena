@@ -3,7 +3,6 @@ import { NavLink } from 'react-router-dom';
 const links = [
   { to: '/', label: 'Painel', icon: '📊' },
   { to: '/gerador', label: 'Gerador & Simulador', icon: '🎲' },
-  { to: '/estrategias', label: 'Estratégias', icon: '🎯' },
   { to: '/analise', label: 'Análise', icon: '📈' },
 ];
 
