@@ -10,19 +10,23 @@ router.get('/simulate', (req: Request, res: Response) => {
     const randomCount = parseInt(req.query.count as string) || 1000;
 
     if (!numbersStr) {
-      res.status(400).json({ error: 'Parâmetro "numbers" obrigatório (ex: ?numbers=01,02,03,04,05,06)' });
+      res.status(400).json({ error: 'Parâmetro "numbers" obrigatório. Ex: ?numbers=01,02,03,04,05,06 ou ?numbers=01,02,03,04,05,06;07,08,09,10,11,12 para múltiplos jogos' });
       return;
     }
 
-    const numbers = numbersStr.split(',').map(n => n.trim().padStart(2, '0'));
+    const games = numbersStr.split(';').map(game =>
+      game.split(',').map(n => n.trim().padStart(2, '0'))
+    );
 
-    if (numbers.length !== 6) {
-      res.status(400).json({ error: 'Forneça exatamente 6 números' });
-      return;
+    for (const game of games) {
+      if (game.length !== 6) {
+        res.status(400).json({ error: 'Cada jogo deve ter exatamente 6 números' });
+        return;
+      }
     }
 
     const result = runSimulation({
-      numbers,
+      games,
       mode: mode === 'random' ? 'random' : 'historical',
       randomCount
     });

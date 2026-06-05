@@ -1,7 +1,8 @@
 import { useState, useCallback } from 'react';
-import { fetchGenerate } from '../lib/api';
-import type { GenerateResponse } from '../lib/api';
+import { fetchGenerate, fetchSimulate } from '../lib/api';
+import type { GenerateResponse, SimulationResponse } from '../lib/api';
 import { GameCard } from '../components/GameCard';
+import { NumberBall } from '../components/NumberBall';
 
 const MODES = [
   { value: 'random', label: 'Aleatório Puro' },
@@ -23,6 +24,11 @@ export function Gerador() {
   const [results, setResults] = useState<GenerateResponse | null>(null);
   const [loading, setLoading] = useState(false);
 
+  const [simMode, setSimMode] = useState('historical');
+  const [randomCount, setRandomCount] = useState(1000);
+  const [simResult, setSimResult] = useState<SimulationResponse | null>(null);
+  const [simLoading, setSimLoading] = useState(false);
+
   const handleGenerate = useCallback(async () => {
     setLoading(true);
     try {
@@ -41,94 +47,230 @@ export function Gerador() {
     }
   }, [mode, count, fixed, exclude, seed]);
 
-  return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-white">Gerador de Números</h1>
+  const handleSimulateGame = useCallback(async (numbers: string[]) => {
+    setSimLoading(true);
+    try {
+      const res = await fetchSimulate({
+        numbers: numbers.join(','),
+        mode: simMode,
+        count: simMode === 'random' ? randomCount : undefined,
+      });
+      setSimResult(res);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setSimLoading(false);
+    }
+  }, [simMode, randomCount]);
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="space-y-3">
+  const handleSimulateAll = useCallback(async () => {
+    if (!results || results.jogos.length === 0) return;
+    setSimLoading(true);
+    try {
+      const numbersParam = results.jogos.map(j => j.join(',')).join(';');
+      const res = await fetchSimulate({
+        numbers: numbersParam,
+        mode: simMode,
+        count: simMode === 'random' ? randomCount : undefined,
+      });
+      setSimResult(res);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setSimLoading(false);
+    }
+  }, [results, simMode, randomCount]);
+
+  return (
+    <div className="space-y-8">
+      {/* Gerador Section */}
+      <div className="space-y-6">
+        <h1 className="text-2xl font-bold text-white">Gerador de Números</h1>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-3">
+            <div>
+              <label className="text-sm text-gray-400 block mb-1">Modo</label>
+              <select
+                value={mode}
+                onChange={e => setMode(e.target.value)}
+                className="w-full bg-gray-800 border border-gray-700 rounded-md px-3 py-2 text-white text-sm"
+              >
+                {MODES.map(m => (
+                  <option key={m.value} value={m.value}>{m.label}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="text-sm text-gray-400 block mb-1">Quantidade de Jogos (1-10)</label>
+              <input
+                type="number"
+                min={1}
+                max={10}
+                value={count}
+                onChange={e => setCount(Math.max(1, Math.min(10, parseInt(e.target.value) || 1)))}
+                className="w-full bg-gray-800 border border-gray-700 rounded-md px-3 py-2 text-white text-sm"
+              />
+            </div>
+
+            <div>
+              <label className="text-sm text-gray-400 block mb-1">Números Fixos (ex: 01,15,30)</label>
+              <input
+                type="text"
+                value={fixed}
+                onChange={e => setFixed(e.target.value)}
+                placeholder="01,15,30"
+                className="w-full bg-gray-800 border border-gray-700 rounded-md px-3 py-2 text-white text-sm"
+              />
+            </div>
+
+            <div>
+              <label className="text-sm text-gray-400 block mb-1">Números Excluídos (ex: 58,59,60)</label>
+              <input
+                type="text"
+                value={exclude}
+                onChange={e => setExclude(e.target.value)}
+                placeholder="58,59,60"
+                className="w-full bg-gray-800 border border-gray-700 rounded-md px-3 py-2 text-white text-sm"
+              />
+            </div>
+
+            {mode === 'dreams' && (
+              <div>
+                <label className="text-sm text-gray-400 block mb-1">Números Semente (ex: 07,13,21)</label>
+                <input
+                  type="text"
+                  value={seed}
+                  onChange={e => setSeed(e.target.value)}
+                  placeholder="07,13,21"
+                  className="w-full bg-gray-800 border border-gray-700 rounded-md px-3 py-2 text-white text-sm"
+                />
+              </div>
+            )}
+          </div>
+
+          <div className="flex items-end">
+            <button
+              onClick={handleGenerate}
+              disabled={loading}
+              className="bg-green-700 hover:bg-green-600 disabled:bg-gray-700 text-white px-6 py-2.5 rounded-md font-medium transition-colors"
+            >
+              {loading ? 'Gerando...' : 'Gerar Números'}
+            </button>
+          </div>
+        </div>
+
+        {results && (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-gray-400">
+                Modo: <span className="text-white capitalize">{results.modo}</span>
+              </p>
+              {results.jogos.length > 1 && (
+                <button
+                  onClick={handleSimulateAll}
+                  disabled={simLoading}
+                  className="text-sm bg-blue-700 hover:bg-blue-600 disabled:bg-gray-700 text-white px-3 py-1 rounded-md transition-colors"
+                >
+                  {simLoading ? 'Simulando todos...' : 'Simular Todos'}
+                </button>
+              )}
+            </div>
+            {results.jogos.map((jogo, i) => (
+              <div key={i} className="space-y-2">
+                <GameCard numbers={jogo} index={i} />
+                <div className="flex gap-2 ml-12">
+                  <button
+                    onClick={() => handleSimulateGame(jogo)}
+                    disabled={simLoading}
+                    className="text-xs bg-blue-700 hover:bg-blue-600 disabled:bg-gray-700 text-white px-3 py-1 rounded transition-colors"
+                  >
+                    {simLoading ? 'Simulando...' : 'Simular este jogo'}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Simulator Section */}
+      <div className="border-t border-gray-800 pt-6 space-y-6">
+        <h2 className="text-xl font-bold text-white">Simulador</h2>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
-            <label className="text-sm text-gray-400 block mb-1">Modo</label>
+            <label className="text-sm text-gray-400 block mb-1">Modo de Simulação</label>
             <select
-              value={mode}
-              onChange={e => setMode(e.target.value)}
+              value={simMode}
+              onChange={e => setSimMode(e.target.value)}
               className="w-full bg-gray-800 border border-gray-700 rounded-md px-3 py-2 text-white text-sm"
             >
-              {MODES.map(m => (
-                <option key={m.value} value={m.value}>{m.label}</option>
-              ))}
+              <option value="historical">Contra Histórico Real</option>
+              <option value="random">Sorteios Aleatórios</option>
             </select>
           </div>
 
-          <div>
-            <label className="text-sm text-gray-400 block mb-1">Quantidade de Jogos (1-10)</label>
-            <input
-              type="number"
-              min={1}
-              max={10}
-              value={count}
-              onChange={e => setCount(Math.max(1, Math.min(10, parseInt(e.target.value) || 1)))}
-              className="w-full bg-gray-800 border border-gray-700 rounded-md px-3 py-2 text-white text-sm"
-            />
-          </div>
-
-          <div>
-            <label className="text-sm text-gray-400 block mb-1">Números Fixos (ex: 01,15,30)</label>
-            <input
-              type="text"
-              value={fixed}
-              onChange={e => setFixed(e.target.value)}
-              placeholder="01,15,30"
-              className="w-full bg-gray-800 border border-gray-700 rounded-md px-3 py-2 text-white text-sm"
-            />
-          </div>
-
-          <div>
-            <label className="text-sm text-gray-400 block mb-1">Números Excluídos (ex: 58,59,60)</label>
-            <input
-              type="text"
-              value={exclude}
-              onChange={e => setExclude(e.target.value)}
-              placeholder="58,59,60"
-              className="w-full bg-gray-800 border border-gray-700 rounded-md px-3 py-2 text-white text-sm"
-            />
-          </div>
-
-          {mode === 'dreams' && (
+          {simMode === 'random' && (
             <div>
-              <label className="text-sm text-gray-400 block mb-1">Números Semente (ex: 07,13,21)</label>
+              <label className="text-sm text-gray-400 block mb-1">Quantidade de Sorteios</label>
               <input
-                type="text"
-                value={seed}
-                onChange={e => setSeed(e.target.value)}
-                placeholder="07,13,21"
+                type="number"
+                min={100}
+                max={100000}
+                step={100}
+                value={randomCount}
+                onChange={e => setRandomCount(parseInt(e.target.value) || 1000)}
                 className="w-full bg-gray-800 border border-gray-700 rounded-md px-3 py-2 text-white text-sm"
               />
             </div>
           )}
         </div>
 
-        <div className="flex items-end">
-          <button
-            onClick={handleGenerate}
-            disabled={loading}
-            className="bg-green-700 hover:bg-green-600 disabled:bg-gray-700 text-white px-6 py-2.5 rounded-md font-medium transition-colors"
-          >
-            {loading ? 'Gerando...' : 'Gerar Números'}
-          </button>
-        </div>
-      </div>
+        {simResult && (
+          <div className="space-y-4">
+            <h3 className="text-lg font-medium">
+              Resultados — {simResult.totalConcursos.toLocaleString('pt-BR')} concursos ({simResult.modo})
+            </h3>
 
-      {results && (
-        <div className="space-y-3">
-          <p className="text-sm text-gray-400">
-            Modo: <span className="text-white capitalize">{results.modo}</span>
-          </p>
-          {results.jogos.map((jogo, i) => (
-            <GameCard key={i} numbers={jogo} index={i} />
-          ))}
-        </div>
-      )}
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-800">
+                    <th className="text-left py-3 text-gray-400">Jogo</th>
+                    <th className="text-center py-3 text-gray-400">Números</th>
+                    <th className="text-center py-3 text-yellow-400">6</th>
+                    <th className="text-center py-3 text-purple-400">5</th>
+                    <th className="text-center py-3 text-blue-400">4</th>
+                    <th className="text-center py-3 text-gray-400">3</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {simResult.jogos.map((jogo, i) => (
+                    <tr key={i} className="border-b border-gray-800/50 hover:bg-gray-800/30">
+                      <td className="py-2 font-mono text-gray-500">#{i + 1}</td>
+                      <td className="py-2">
+                        <div className="flex gap-1 justify-center">
+                          {jogo.numeros.map(n => (
+                            <NumberBall key={n} number={n} size="sm" />
+                          ))}
+                        </div>
+                      </td>
+                      {['6', '5', '4', '3'].map(k => (
+                        <td key={k} className="text-center py-2 font-mono">
+                          <div className="text-white">{jogo.acertos[k]?.toLocaleString('pt-BR') ?? 0}</div>
+                          <div className="text-xs text-gray-500">{jogo.porcentagens[k]?.toFixed(2)}%</div>
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

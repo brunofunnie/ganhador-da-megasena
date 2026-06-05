@@ -1,17 +1,21 @@
 import { getDb } from './db';
 
 export interface SimulationOptions {
-  numbers: string[];
+  games: string[][];
   mode: 'historical' | 'random';
   randomCount?: number;
 }
 
-export interface SimulationResult {
+export interface GameResult {
   numeros: string[];
-  modo: string;
-  totalConcursos: number;
   acertos: Record<string, number>;
   porcentagens: Record<string, number>;
+}
+
+export interface SimulationResult {
+  jogos: GameResult[];
+  modo: string;
+  totalConcursos: number;
 }
 
 function countMatches(a: string[], b: string[]): number {
@@ -29,10 +33,19 @@ function generateRandomDraw(): string[] {
     .map(n => n.toString().padStart(2, '0'));
 }
 
-export function runSimulation(options: SimulationOptions): SimulationResult {
-  const { numbers, mode, randomCount = 1000 } = options;
+function newAcertos(): Record<string, number> {
+  return { '6': 0, '5': 0, '4': 0, '3': 0, '2': 0, '1': 0, '0': 0 };
+}
 
-  const acertos: Record<string, number> = { '6': 0, '5': 0, '4': 0, '3': 0, '2': 0, '1': 0, '0': 0 };
+export function runSimulation(options: SimulationOptions): SimulationResult {
+  const { games, mode, randomCount = 1000 } = options;
+
+  const jogos: GameResult[] = games.map(numbers => ({
+    numeros: numbers,
+    acertos: newAcertos(),
+    porcentagens: {},
+  }));
+
   let totalConcursos = 0;
 
   if (mode === 'historical') {
@@ -42,30 +55,33 @@ export function runSimulation(options: SimulationOptions): SimulationResult {
 
     for (const draw of draws) {
       const dezenas: string[] = JSON.parse(draw.dezenas);
-      const matches = countMatches(numbers, dezenas);
-      acertos[String(matches)] = (acertos[String(matches)] || 0) + 1;
+      for (const jogo of jogos) {
+        const matches = countMatches(jogo.numeros, dezenas);
+        jogo.acertos[String(matches)] = (jogo.acertos[String(matches)] || 0) + 1;
+      }
     }
   } else {
     totalConcursos = randomCount;
     for (let i = 0; i < randomCount; i++) {
       const draw = generateRandomDraw();
-      const matches = countMatches(numbers, draw);
-      acertos[String(matches)] = (acertos[String(matches)] || 0) + 1;
+      for (const jogo of jogos) {
+        const matches = countMatches(jogo.numeros, draw);
+        jogo.acertos[String(matches)] = (jogo.acertos[String(matches)] || 0) + 1;
+      }
     }
   }
 
-  const porcentagens: Record<string, number> = {};
-  for (const key of Object.keys(acertos)) {
-    porcentagens[key] = totalConcursos > 0
-      ? parseFloat(((acertos[key] / totalConcursos) * 100).toFixed(2))
-      : 0;
+  for (const jogo of jogos) {
+    for (const key of Object.keys(jogo.acertos)) {
+      jogo.porcentagens[key] = totalConcursos > 0
+        ? parseFloat(((jogo.acertos[key] / totalConcursos) * 100).toFixed(2))
+        : 0;
+    }
   }
 
   return {
-    numeros: numbers,
+    jogos,
     modo: mode === 'historical' ? 'histórico' : 'aleatório',
     totalConcursos,
-    acertos,
-    porcentagens
   };
 }

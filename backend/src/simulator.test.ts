@@ -35,35 +35,50 @@ describe('simulator', () => {
 
   it('should simulate against historical draws', () => {
     const result = runSimulation({
-      numbers: ['01', '02', '03', '04', '05', '06'],
+      games: [['01', '02', '03', '04', '05', '06']],
       mode: 'historical'
     });
 
     expect(result.totalConcursos).toBe(5);
-    expect(result.acertos).toHaveProperty('6');
-    expect(result.acertos).toHaveProperty('5');
-    expect(result.acertos).toHaveProperty('4');
-    expect(result.acertos['6']).toBe(2);
+    expect(result.jogos).toHaveLength(1);
+    expect(result.jogos[0].acertos).toHaveProperty('6');
+    expect(result.jogos[0].acertos).toHaveProperty('5');
+    expect(result.jogos[0].acertos).toHaveProperty('4');
+    expect(result.jogos[0].acertos['6']).toBe(2);
+  });
+
+  it('should simulate multiple games', () => {
+    const result = runSimulation({
+      games: [
+        ['01', '02', '03', '04', '05', '06'],
+        ['10', '11', '12', '13', '14', '15'],
+      ],
+      mode: 'historical'
+    });
+
+    expect(result.jogos).toHaveLength(2);
+    expect(result.jogos[0].acertos['6']).toBe(2);
+    expect(result.jogos[1].acertos['6']).toBe(1);
   });
 
   it('should simulate against random draws', () => {
     const result = runSimulation({
-      numbers: ['01', '02', '03', '04', '05', '06'],
+      games: [['01', '02', '03', '04', '05', '06']],
       mode: 'random',
       randomCount: 100
     });
 
     expect(result.totalConcursos).toBe(100);
-    const totalMatches = Object.values(result.acertos).reduce((a, b) => a + b, 0);
+    const totalMatches = Object.values(result.jogos[0].acertos).reduce((a, b) => a + b, 0);
     expect(totalMatches).toBe(100);
   });
 
   it('should calculate percentages', () => {
     const result = runSimulation({
-      numbers: ['01', '02', '03', '04', '05', '06'],
+      games: [['01', '02', '03', '04', '05', '06']],
       mode: 'historical'
     });
 
-    expect(result.porcentagens['6']).toBeCloseTo(40, 1);
+    expect(result.jogos[0].porcentagens['6']).toBeCloseTo(40, 1);
   });
 });

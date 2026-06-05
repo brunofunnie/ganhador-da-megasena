@@ -33,6 +33,17 @@ export function Estrategias() {
         Clique em "Executar" para gerar os números.
       </p>
 
+      {selectedResult && (
+        <div className="space-y-3">
+          <h3 className="text-lg font-medium">
+            {selectedResult.estrategia.nome}
+          </h3>
+          {selectedResult.jogos.map((jogo, i) => (
+            <GameCard key={i} numbers={jogo} index={selectedResult.jogos.length > 1 ? i : undefined} />
+          ))}
+        </div>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {strategies?.map(s => (
           <div key={s.id} className="bg-gray-900 border border-gray-800 rounded-lg p-4">
@@ -48,17 +59,6 @@ export function Estrategias() {
           </div>
         ))}
       </div>
-
-      {selectedResult && (
-        <div className="space-y-3 mt-6">
-          <h3 className="text-lg font-medium">
-            {selectedResult.estrategia.nome}
-          </h3>
-          {selectedResult.jogos.map((jogo, i) => (
-            <GameCard key={i} numbers={jogo} index={selectedResult.jogos.length > 1 ? i : undefined} />
-          ))}
-        </div>
-      )}
     </div>
   );
 }

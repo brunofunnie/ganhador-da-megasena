@@ -50,11 +50,13 @@ export interface StrategyResponse {
 }
 
 export interface SimulationResponse {
-  numeros: string[];
+  jogos: Array<{
+    numeros: string[];
+    acertos: Record<string, number>;
+    porcentagens: Record<string, number>;
+  }>;
   modo: string;
   totalConcursos: number;
-  acertos: Record<string, number>;
-  porcentagens: Record<string, number>;
 }
 
 export function fetchStatus(): Promise<StatusResponse> {
