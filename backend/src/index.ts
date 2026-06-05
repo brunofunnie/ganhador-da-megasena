@@ -3,6 +3,7 @@ import cors from 'cors';
 import { initDb } from './db';
 import { syncResults } from './sync';
 import statusRoutes from './routes/status';
+import statisticsRoutes from './routes/statistics';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -11,6 +12,7 @@ app.use(cors());
 app.use(express.json());
 
 app.use('/api', statusRoutes);
+app.use('/api', statisticsRoutes);
 
 async function start() {
   initDb();
