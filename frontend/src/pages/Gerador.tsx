@@ -201,81 +201,86 @@ export function Gerador() {
         </div>
       </div>
 
-      {/* Generated Games */}
-      {results && (
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-gray-400">
-              Modo: <span className="text-white capitalize">{results.modo}</span>
-            </p>
-            {results.jogos.length > 1 && (
-              <button
-                onClick={handleSimulateAll}
-                disabled={simLoading}
-                className="text-sm bg-blue-700 hover:bg-blue-600 disabled:bg-gray-700 text-white px-3 py-1 rounded-md transition-colors"
-              >
-                {simLoading ? 'Simulando todos...' : 'Simular Todos'}
-              </button>
-            )}
-          </div>
-          {results.jogos.map((jogo, i) => (
-            <div key={i} className="space-y-2">
-              <GameCard numbers={jogo} index={i} />
-              <div className="flex gap-2 ml-12">
-                <button
-                  onClick={() => handleSimulateGame(jogo)}
-                  disabled={simLoading}
-                  className="text-xs bg-blue-700 hover:bg-blue-600 disabled:bg-gray-700 text-white px-3 py-1 rounded transition-colors"
-                >
-                  {simLoading ? 'Simulando...' : 'Simular este jogo'}
-                </button>
+      {/* Results: Generated Games (left) | Simulator Results (right) */}
+      {(results || simResult) && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Left: Generated Games */}
+          {results && (
+            <div className="bg-gray-900 border border-gray-800 rounded-lg p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="text-sm text-gray-400">
+                  Modo: <span className="text-white capitalize">{results.modo}</span>
+                </p>
+                {results.jogos.length > 1 && (
+                  <button
+                    onClick={handleSimulateAll}
+                    disabled={simLoading}
+                    className="text-sm bg-blue-700 hover:bg-blue-600 disabled:bg-gray-700 text-white px-3 py-1 rounded-md transition-colors"
+                  >
+                    {simLoading ? 'Simulando todos...' : 'Simular Todos'}
+                  </button>
+                )}
+              </div>
+              {results.jogos.map((jogo, i) => (
+                <div key={i} className="space-y-2">
+                  <GameCard numbers={jogo} index={i} />
+                  <div className="flex gap-2 ml-12">
+                    <button
+                      onClick={() => handleSimulateGame(jogo)}
+                      disabled={simLoading}
+                      className="text-xs bg-blue-700 hover:bg-blue-600 disabled:bg-gray-700 text-white px-3 py-1 rounded transition-colors"
+                    >
+                      {simLoading ? 'Simulando...' : 'Simular este jogo'}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Right: Simulator Results */}
+          {simResult && (
+            <div className="bg-gray-900 border border-gray-800 rounded-lg p-4 space-y-3">
+              <h3 className="text-sm font-medium text-gray-400">
+                Resultados — {simResult.totalConcursos.toLocaleString('pt-BR')} concursos ({simResult.modo})
+              </h3>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-800">
+                      <th className="text-left py-2 text-gray-400">Jogo</th>
+                      <th className="text-center py-2 text-gray-400">Números</th>
+                      <th className="text-center py-2 text-yellow-400">6</th>
+                      <th className="text-center py-2 text-purple-400">5</th>
+                      <th className="text-center py-2 text-blue-400">4</th>
+                      <th className="text-center py-2 text-gray-400">3</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {simResult.jogos.map((jogo, i) => (
+                      <tr key={i} className="border-b border-gray-800/50 hover:bg-gray-800/30">
+                        <td className="py-2 font-mono text-gray-500">#{i + 1}</td>
+                        <td className="py-2">
+                          <div className="flex gap-1 justify-center">
+                            {jogo.numeros.map(n => (
+                              <NumberBall key={n} number={n} size="sm" />
+                            ))}
+                          </div>
+                        </td>
+                        {['6', '5', '4', '3'].map(k => (
+                          <td key={k} className="text-center py-2 font-mono">
+                            <div className="text-white">{jogo.acertos[k]?.toLocaleString('pt-BR') ?? 0}</div>
+                            <div className="text-xs text-gray-500">{jogo.porcentagens[k]?.toFixed(2)}%</div>
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </div>
-          ))}
-        </div>
-      )}
-
-      {/* Simulator Results */}
-      {simResult && (
-        <div className="space-y-4 border-t border-gray-800 pt-6">
-          <h3 className="text-lg font-medium">
-            Resultados — {simResult.totalConcursos.toLocaleString('pt-BR')} concursos ({simResult.modo})
-          </h3>
-
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-gray-800">
-                  <th className="text-left py-3 text-gray-400">Jogo</th>
-                  <th className="text-center py-3 text-gray-400">Números</th>
-                  <th className="text-center py-3 text-yellow-400">6</th>
-                  <th className="text-center py-3 text-purple-400">5</th>
-                  <th className="text-center py-3 text-blue-400">4</th>
-                  <th className="text-center py-3 text-gray-400">3</th>
-                </tr>
-              </thead>
-              <tbody>
-                {simResult.jogos.map((jogo, i) => (
-                  <tr key={i} className="border-b border-gray-800/50 hover:bg-gray-800/30">
-                    <td className="py-2 font-mono text-gray-500">#{i + 1}</td>
-                    <td className="py-2">
-                      <div className="flex gap-1 justify-center">
-                        {jogo.numeros.map(n => (
-                          <NumberBall key={n} number={n} size="sm" />
-                        ))}
-                      </div>
-                    </td>
-                    {['6', '5', '4', '3'].map(k => (
-                      <td key={k} className="text-center py-2 font-mono">
-                        <div className="text-white">{jogo.acertos[k]?.toLocaleString('pt-BR') ?? 0}</div>
-                        <div className="text-xs text-gray-500">{jogo.porcentagens[k]?.toFixed(2)}%</div>
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          )}
         </div>
       )}
     </div>
