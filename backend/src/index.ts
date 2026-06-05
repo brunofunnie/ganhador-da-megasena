@@ -5,6 +5,7 @@ import { syncResults } from './sync';
 import statusRoutes from './routes/status';
 import statisticsRoutes from './routes/statistics';
 import generateRoutes from './routes/generate';
+import strategiesRoutes from './routes/strategies';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -15,6 +16,7 @@ app.use(express.json());
 app.use('/api', statusRoutes);
 app.use('/api', statisticsRoutes);
 app.use('/api', generateRoutes);
+app.use('/api', strategiesRoutes);
 
 async function start() {
   initDb();
