@@ -26,36 +26,36 @@ export function Analise() {
       <h1 className="text-2xl font-bold text-white">Análise Completa</h1>
 
       <div className="bg-gray-900 border border-gray-800 rounded-lg overflow-hidden">
-        <div className="p-4 border-b border-gray-800">
-          <h3 className="text-sm font-medium text-gray-400">Tabela Completa — Todos os 60 Números</h3>
+        <div className="px-3 py-1.5 border-b border-gray-800">
+          <h3 className="text-xs font-medium text-gray-500">Tabela Completa — Todos os 60 Números</h3>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-[11px] leading-tight">
             <thead>
-              <tr className="border-b border-gray-800 text-gray-400">
-                <th className="text-left py-2 px-4">Nº</th>
-                <th className="text-left py-2 px-4">Vezes Sorteado</th>
-                <th className="text-left py-2 px-4">%</th>
-                <th className="text-left py-2 px-4">Nº</th>
-                <th className="text-left py-2 px-4">Vezes Sorteado</th>
-                <th className="text-left py-2 px-4">%</th>
-                <th className="text-left py-2 px-4">Nº</th>
-                <th className="text-left py-2 px-4">Vezes Sorteado</th>
-                <th className="text-left py-2 px-4">%</th>
+              <tr className="border-b border-gray-800 text-gray-500">
+                <th className="text-left py-0.5 px-1.5">Nº</th>
+                <th className="text-left py-0.5 px-1.5">Vezes</th>
+                <th className="text-left py-0.5 px-1.5">%</th>
+                <th className="text-left py-0.5 px-1.5">Nº</th>
+                <th className="text-left py-0.5 px-1.5">Vezes</th>
+                <th className="text-left py-0.5 px-1.5">%</th>
+                <th className="text-left py-0.5 px-1.5">Nº</th>
+                <th className="text-left py-0.5 px-1.5">Vezes</th>
+                <th className="text-left py-0.5 px-1.5">%</th>
               </tr>
             </thead>
             <tbody>
               {Array.from({ length: 20 }, (_, row) => (
-                <tr key={row} className="border-b border-gray-800/50 hover:bg-gray-800/30">
+                <tr key={row} className="border-b border-gray-800/30">
                   {[0, 1, 2].map(col => {
                     const idx = row + col * 20;
                     const item = sortedByNumber[idx];
-                    if (!item) return <td key={col} colSpan={3} className="py-1.5 px-4"></td>;
+                    if (!item) return <td key={col} colSpan={3} className="py-0 px-1.5"></td>;
                     return (
                       <>
-                        <td key={`num-${idx}`} className="py-1.5 px-4 font-mono text-white">{item.numero}</td>
-                        <td key={`freq-${idx}`} className="py-1.5 px-4 font-mono text-green-400">{item.frequencia}</td>
-                        <td key={`pct-${idx}`} className="py-1.5 px-4 font-mono text-gray-500">{item.porcentagem}%</td>
+                        <td key={`num-${idx}`} className="py-0 px-1.5 font-mono text-white">{item.numero}</td>
+                        <td key={`freq-${idx}`} className="py-0 px-1.5 font-mono text-green-400">{item.frequencia}</td>
+                        <td key={`pct-${idx}`} className="py-0 px-1.5 font-mono text-gray-500">{item.porcentagem}%</td>
                       </>
                     );
                   })}
