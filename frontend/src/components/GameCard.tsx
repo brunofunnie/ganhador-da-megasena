@@ -1,12 +1,13 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { NumberBall } from './NumberBall';
 
 interface GameCardProps {
   numbers: string[];
   index?: number;
+  action?: ReactNode;
 }
 
-export function GameCard({ numbers, index }: GameCardProps) {
+export function GameCard({ numbers, index, action }: GameCardProps) {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = async () => {
@@ -23,6 +24,7 @@ export function GameCard({ numbers, index }: GameCardProps) {
       {numbers.map((n) => (
         <NumberBall key={n} number={n} size="sm" />
       ))}
+      {action}
       <button
         onClick={handleCopy}
         className="ml-auto text-xs text-gray-500 hover:text-gray-300 border border-gray-700 hover:border-gray-500 rounded px-2 py-1 transition-colors"
