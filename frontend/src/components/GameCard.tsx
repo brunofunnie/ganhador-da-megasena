@@ -17,7 +17,7 @@ export function GameCard({ numbers, index, action }: GameCardProps) {
   };
 
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded-lg p-4 flex flex-wrap items-center gap-2">
+    <div className="bg-gray-900 border border-gray-800 rounded-lg p-2 flex flex-wrap items-center gap-1">
       {index !== undefined && (
         <span className="text-xs text-gray-500 mr-1">#{index + 1}</span>
       )}
