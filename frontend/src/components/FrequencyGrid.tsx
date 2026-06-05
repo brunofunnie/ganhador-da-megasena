@@ -27,11 +27,11 @@ export function FrequencyGrid({ data, title, maxValue }: FrequencyGridProps) {
           return (
             <div
               key={numero}
-              className={`${bgColor} rounded p-1 flex flex-col items-center justify-center`}
+              className={`${bgColor} rounded p-1 pb-2 flex flex-col items-center justify-center`}
               title={`${numero}: ${frequencia}x`}
             >
               <NumberBall number={numero} size="sm" variant={intensity > 0.5 ? 'default' : 'dim'} />
-              <span className="text-[10px] text-gray-500 block mt-0.5">{frequencia}</span>
+              <span className="text-[10px] text-gray-500 block mt-1">{frequencia}</span>
             </div>
           );
         })}
