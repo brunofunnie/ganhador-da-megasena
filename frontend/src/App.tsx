@@ -4,6 +4,7 @@ import { Layout } from './components/Layout';
 import { Dashboard } from './pages/Dashboard';
 import { Gerador } from './pages/Gerador';
 import { Analise } from './pages/Analise';
+import { Sorteios } from './pages/Sorteios';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -24,6 +25,7 @@ function App() {
             <Route path="/gerador" element={<Gerador />} />
             <Route path="/simulador" element={<Navigate to="/gerador" replace />} />
             <Route path="/analise" element={<Analise />} />
+            <Route path="/sorteios" element={<Sorteios />} />
           </Route>
         </Routes>
       </BrowserRouter>

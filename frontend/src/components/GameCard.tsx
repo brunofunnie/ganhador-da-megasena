@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from 'react';
+import { Check, Copy } from 'lucide-react';
 import { NumberBall } from './NumberBall';
 
 interface GameCardProps {
@@ -17,20 +18,24 @@ export function GameCard({ numbers, index, action }: GameCardProps) {
   };
 
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded-lg p-2 flex flex-wrap items-center gap-1">
+    <div className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
       {index !== undefined && (
-        <span className="text-xs text-gray-500 mr-1">#{index + 1}</span>
+        <span className="rounded-md bg-blue-50 px-2 py-1 text-xs font-bold text-blue-800">Jogo {index + 1}</span>
       )}
-      {numbers.map((n) => (
-        <NumberBall key={n} number={n} size="sm" />
-      ))}
-      {action}
+      <div className="flex flex-wrap gap-1.5" aria-label={index === undefined ? 'Dezenas do jogo' : `Dezenas do jogo ${index + 1}`}>
+        {numbers.map((n) => <NumberBall key={n} number={n} size="sm" />)}
+      </div>
+      <div className="ml-auto flex flex-wrap items-center gap-2">
+        {action}
       <button
+        type="button"
         onClick={handleCopy}
-        className="ml-auto text-xs text-gray-500 hover:text-gray-300 border border-gray-700 hover:border-gray-500 rounded px-2 py-1 transition-colors"
+        className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-2 text-xs font-bold text-blue-800 transition hover:border-blue-300 hover:bg-blue-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-yellow-400"
       >
+        {copied ? <Check size={15} aria-hidden="true" /> : <Copy size={15} aria-hidden="true" />}
         {copied ? 'Copiado!' : 'Copiar'}
       </button>
+      </div>
     </div>
   );
 }

@@ -1,143 +1,19 @@
 import { useState, useCallback } from 'react';
+import { Play, Trophy } from 'lucide-react';
 import { fetchSimulate, type SimulationResponse } from '../lib/api';
 import { NumberBall } from '../components/NumberBall';
 
+const fieldClass = 'mt-1.5 w-full rounded-xl border border-[#c9d8e8] bg-white px-3 py-2.5 text-sm text-[#17325c] shadow-sm outline-none transition placeholder:text-[#7184a1] focus:border-[#075ca8] focus:ring-2 focus:ring-[#075ca8]/20';
+
 export function Simulador() {
-  const [numbersText, setNumbersText] = useState('');
-  const [mode, setMode] = useState('historical');
-  const [randomCount, setRandomCount] = useState(1000);
-  const [result, setResult] = useState<SimulationResponse | null>(null);
-  const [loading, setLoading] = useState(false);
-
-  const games = numbersText
-    .split('\n')
-    .map(line => line.trim())
-    .filter(line => line.length > 0);
-
+  const [numbersText, setNumbersText] = useState(''); const [mode, setMode] = useState('historical'); const [randomCount, setRandomCount] = useState(1000); const [result, setResult] = useState<SimulationResponse | null>(null); const [loading, setLoading] = useState(false); const [error, setError] = useState<string | null>(null);
+  const games = numbersText.split('\n').map(line => line.trim()).filter(Boolean);
   const validGames = games.filter(g => g.split(',').filter(n => n.trim()).length === 6);
+  const handleSimulate = useCallback(async () => { if (!validGames.length) return; setLoading(true); setError(null); try { setResult(await fetchSimulate({ numbers: validGames.join(';'), mode, count: mode === 'random' ? randomCount : undefined })); } catch (err) { console.error(err); setError('Não foi possível executar a simulação. Confira seus jogos e tente novamente.'); } finally { setLoading(false); } }, [validGames, mode, randomCount]);
 
-  const handleSimulate = useCallback(async () => {
-    if (validGames.length === 0) return;
-
-    setLoading(true);
-    try {
-      const numbersParam = validGames.join(';');
-      const res = await fetchSimulate({
-        numbers: numbersParam,
-        mode,
-        count: mode === 'random' ? randomCount : undefined,
-      });
-      setResult(res);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  }, [numbersText, mode, randomCount, validGames]);
-
-  return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-white">Simulador de Sorteios</h1>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="space-y-3">
-          <div>
-            <label className="text-sm text-gray-400 block mb-1">
-              Seus Jogos (um por linha, 6 números separados por vírgula)
-            </label>
-            <textarea
-              value={numbersText}
-              onChange={e => setNumbersText(e.target.value)}
-              placeholder={"01,02,03,04,05,06\n07,08,09,10,11,12\n13,14,15,16,17,18"}
-              rows={5}
-              className="w-full bg-gray-800 border border-gray-700 rounded-md px-3 py-2 text-white text-sm resize-y"
-            />
-            <span className="text-xs text-gray-500 mt-1 block">
-              {games.length > 0 ? `${validGames.length} de ${games.length} jogos válidos` : ''}
-            </span>
-          </div>
-
-          <div>
-            <label className="text-sm text-gray-400 block mb-1">Modo</label>
-            <select
-              value={mode}
-              onChange={e => setMode(e.target.value)}
-              className="w-full bg-gray-800 border border-gray-700 rounded-md px-3 py-2 text-white text-sm"
-            >
-              <option value="historical">Contra Histórico Real</option>
-              <option value="random">Sorteios Aleatórios</option>
-            </select>
-          </div>
-
-          {mode === 'random' && (
-            <div>
-              <label className="text-sm text-gray-400 block mb-1">Quantidade de Sorteios</label>
-              <input
-                type="number"
-                min={100}
-                max={100000}
-                step={100}
-                value={randomCount}
-                onChange={e => setRandomCount(parseInt(e.target.value) || 1000)}
-                className="w-full bg-gray-800 border border-gray-700 rounded-md px-3 py-2 text-white text-sm"
-              />
-            </div>
-          )}
-        </div>
-
-        <div className="flex items-end">
-          <button
-            onClick={handleSimulate}
-            disabled={loading || validGames.length === 0}
-            className="bg-blue-700 hover:bg-blue-600 disabled:bg-gray-700 text-white px-6 py-2.5 rounded-md font-medium transition-colors"
-          >
-            {loading ? 'Simulando...' : 'Executar Simulação'}
-          </button>
-        </div>
-      </div>
-
-      {result && (
-        <div className="space-y-4">
-          <h3 className="text-lg font-medium">
-            Resultados — {result.totalConcursos.toLocaleString('pt-BR')} concursos ({result.modo})
-          </h3>
-
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-gray-800">
-                  <th className="text-left py-3 text-gray-400">Jogo</th>
-                  <th className="text-center py-3 text-gray-400">Números</th>
-                  <th className="text-center py-3 text-yellow-400">6</th>
-                  <th className="text-center py-3 text-purple-400">5</th>
-                  <th className="text-center py-3 text-blue-400">4</th>
-                  <th className="text-center py-3 text-gray-400">3</th>
-                </tr>
-              </thead>
-              <tbody>
-                {result.jogos.map((jogo, i) => (
-                  <tr key={i} className="border-b border-gray-800/50 hover:bg-gray-800/30">
-                    <td className="py-2 font-mono text-gray-500">#{i + 1}</td>
-                    <td className="py-2">
-                      <div className="flex gap-1 justify-center">
-                        {jogo.numeros.map(n => (
-                          <NumberBall key={n} number={n} size="sm" />
-                        ))}
-                      </div>
-                    </td>
-                    {['6', '5', '4', '3'].map(k => (
-                      <td key={k} className="text-center py-2 font-mono">
-                        <div className="text-white">{jogo.acertos[k]?.toLocaleString('pt-BR') ?? 0}</div>
-                        <div className="text-xs text-gray-500">{jogo.porcentagens[k]?.toFixed(2)}%</div>
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-    </div>
-  );
+  return <div className="space-y-6 text-[#17325c]"><header className="border-b border-[#d7e1ee] pb-6"><p className="text-xs font-bold uppercase tracking-[0.16em] text-[#3569b5]">Validação de estratégias</p><h1 className="mt-1 text-3xl font-bold tracking-tight text-[#0d2d62]">Simulador de sorteios</h1><p className="mt-2 max-w-2xl text-sm text-[#49627f]">Compare seus jogos com o histórico real ou com uma amostra de sorteios aleatórios.</p></header>
+    <section className="rounded-2xl border border-[#d7e1ee] bg-white p-5 shadow-sm sm:p-6"><div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_260px]"><div className="space-y-4"><label className="block text-sm font-semibold">Seus jogos <span className="font-normal text-[#49627f]">(um por linha, seis números separados por vírgula)</span><textarea value={numbersText} onChange={e => setNumbersText(e.target.value)} placeholder={'01,02,03,04,05,06\n07,08,09,10,11,12\n13,14,15,16,17,18'} rows={6} className={`${fieldClass} resize-y leading-6`} /></label><p className="text-xs text-[#49627f]" aria-live="polite">{games.length ? `${validGames.length} de ${games.length} jogos válidos` : 'Informe ao menos um jogo para começar.'}</p><div className="grid grid-cols-1 gap-4 sm:grid-cols-2"><label className="block text-sm font-semibold">Modo<select value={mode} onChange={e => setMode(e.target.value)} className={fieldClass}><option value="historical">Contra histórico real</option><option value="random">Sorteios aleatórios</option></select></label>{mode === 'random' && <label className="block text-sm font-semibold">Quantidade de sorteios<input type="number" min={100} max={100000} step={100} value={randomCount} onChange={e => setRandomCount(parseInt(e.target.value) || 1000)} className={fieldClass} /></label>}</div></div><aside className="flex flex-col justify-end rounded-xl bg-[#f4f8fc] p-5"><Trophy className="mb-3 text-[#f4b000]" size={26} aria-hidden="true" /><h2 className="font-bold">Pronto para comparar?</h2><p className="mt-2 text-sm leading-6 text-[#49627f]">Os resultados mostram a incidência de cada faixa de acertos por jogo.</p><button onClick={handleSimulate} disabled={loading || !validGames.length} className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#075ca8] px-4 py-3 text-sm font-bold text-white transition hover:bg-[#064c8c] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#075ca8] disabled:cursor-not-allowed disabled:bg-[#8ba4c0]"><Play size={16} aria-hidden="true" />{loading ? 'Simulando...' : 'Executar simulação'}</button></aside></div>{error && <p role="alert" className="mt-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{error}</p>}</section>
+    {result && <SimulationTable result={result} />}</div>;
 }
+
+function SimulationTable({ result }: { result: SimulationResponse }) { return <section className="overflow-hidden rounded-2xl border border-[#d7e1ee] bg-white shadow-sm"><div className="p-5"><p className="text-xs font-bold uppercase tracking-[0.12em] text-[#3569b5]">Resultado da simulação</p><h2 className="mt-1 text-lg font-bold">{result.totalConcursos.toLocaleString('pt-BR')} concursos · {result.modo}</h2></div><div className="overflow-x-auto"><table className="min-w-[620px] w-full text-sm"><thead className="bg-[#073e82] text-white"><tr><th className="px-4 py-3 text-left font-semibold">Jogo</th><th className="px-4 py-3 text-center font-semibold">Números</th>{['6', '5', '4', '3'].map(k => <th key={k} className="px-3 py-3 text-center font-semibold">{k} acertos</th>)}</tr></thead><tbody>{result.jogos.map((jogo, i) => <tr key={i} className="border-b border-[#e4edf5] last:border-0 hover:bg-[#f4f8fc]"><td className="px-4 py-3 font-mono text-[#49627f]">#{i + 1}</td><td className="px-4 py-3"><div className="flex min-w-max justify-center gap-1">{jogo.numeros.map(n => <NumberBall key={n} number={n} size="sm" />)}</div></td>{['6', '5', '4', '3'].map(k => <td key={k} className="px-3 py-3 text-center font-mono"><span className="block font-semibold text-[#17325c]">{jogo.acertos[k]?.toLocaleString('pt-BR') ?? 0}</span><span className="text-xs text-[#7184a1]">{jogo.porcentagens[k]?.toFixed(2)}%</span></td>)}</tr>)}</tbody></table></div></section>; }

@@ -217,7 +217,8 @@ export function generateNumbers(options: GeneratorOptions): string[][] {
 
         const fromSeed = shuffleArray(seedPool).slice(0, needed);
         const remaining = generateRandomNumbers(
-          Math.max(0, needed - fromSeed.length), available
+          Math.max(0, needed - fromSeed.length),
+          available.filter(number => !fromSeed.includes(number))
         );
         picked = [...fixedNumbers, ...fromSeed.map(formatNum), ...remaining];
         break;

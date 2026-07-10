@@ -1,139 +1,22 @@
+import { Fragment } from 'react';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import { ChartNoAxesColumnIncreasing } from 'lucide-react';
 import { useStatistics } from '../hooks/useStatistics';
 import { FrequencyGrid } from '../components/FrequencyGrid';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+
+const chartTooltip = { backgroundColor: '#ffffff', border: '1px solid #d7e1ee', borderRadius: '10px', color: '#17325c' };
 
 export function Analise() {
-  const { data: stats, isLoading } = useStatistics();
-
-  if (isLoading) {
-    return <div className="text-gray-400">Carregando análise...</div>;
-  }
-
-  if (!stats) {
-    return <div className="text-red-400">Erro ao carregar dados.</div>;
-  }
-
+  const { data: stats, isLoading, isError } = useStatistics();
+  if (isLoading) return <div className="rounded-2xl border border-[#d7e1ee] bg-white px-5 py-10 text-center text-sm text-[#49627f] shadow-sm" role="status">Carregando análise completa e frequências...</div>;
+  if (isError || !stats) return <div className="rounded-2xl border border-red-200 bg-red-50 px-5 py-8 text-center text-sm text-red-800" role="alert">Não foi possível carregar os dados da análise. Tente atualizar a página.</div>;
   const sortedByNumber = [...stats.frequency].sort((a, b) => parseInt(a.numero) - parseInt(b.numero));
-
-  const parityData = Object.entries(stats.parity.evenOddDistribution).map(([key, value]) => ({
-    distribuicao: key,
-    concursos: value,
-    porcentagem: (value / stats.totalConcursos * 100).toFixed(1),
-  }));
-
-  return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-white">Análise Completa</h1>
-
-      {/* Row 1: Full table (left) | Top 15 combined (right) */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Left: Tabela Completa */}
-        <div className="bg-gray-900 border border-gray-800 rounded-lg overflow-hidden">
-          <div className="px-3 py-1.5 border-b border-gray-800">
-            <h3 className="text-xs font-medium text-gray-500">Tabela Completa — Todos os 60 Números</h3>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-[11px] leading-tight">
-              <thead>
-                <tr className="border-b border-gray-800 text-gray-500">
-                  <th className="text-left py-0.5 px-1.5">Nº</th>
-                  <th className="text-left py-0.5 px-1.5">Vezes</th>
-                  <th className="text-left py-0.5 px-1.5">%</th>
-                  <th className="text-left py-0.5 px-1.5">Nº</th>
-                  <th className="text-left py-0.5 px-1.5">Vezes</th>
-                  <th className="text-left py-0.5 px-1.5">%</th>
-                  <th className="text-left py-0.5 px-1.5">Nº</th>
-                  <th className="text-left py-0.5 px-1.5">Vezes</th>
-                  <th className="text-left py-0.5 px-1.5">%</th>
-                </tr>
-              </thead>
-              <tbody>
-                {Array.from({ length: 20 }, (_, row) => (
-                  <tr key={row} className="border-b border-gray-800/30">
-                    {[0, 1, 2].map(col => {
-                      const idx = row + col * 20;
-                      const item = sortedByNumber[idx];
-                      if (!item) return <td key={col} colSpan={3} className="py-0 px-1.5"></td>;
-                      return (
-                        <>
-                          <td key={`num-${idx}`} className="py-0 px-1.5 font-mono text-white">{item.numero}</td>
-                          <td key={`freq-${idx}`} className="py-0 px-1.5 font-mono text-green-400">{item.frequencia}</td>
-                          <td key={`pct-${idx}`} className="py-0 px-1.5 font-mono text-gray-500">{item.porcentagem}%</td>
-                        </>
-                      );
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {/* Right: Combined Top 15 */}
-        <div className="bg-gray-900 border border-gray-800 rounded-lg overflow-hidden">
-          <div className="px-3 py-1.5 border-b border-gray-800">
-            <h3 className="text-xs font-medium text-gray-500">Top 15</h3>
-          </div>
-          <div className="grid grid-cols-2">
-            {/* Left column: Most frequent */}
-            <div className="border-r border-gray-800/50">
-              <div className="px-3 py-1 border-b border-gray-800/50">
-                <span className="text-[10px] text-gray-500">Mais Frequentes</span>
-              </div>
-              <div className="overflow-y-auto max-h-72">
-                {stats.frequency.slice(0, 15).map((f, i) => (
-                  <div key={f.numero} className="flex items-center justify-between px-3 py-0.5 text-xs border-b border-gray-800/20">
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-gray-600 w-3">{i + 1}</span>
-                      <span className="text-white font-mono">{f.numero}</span>
-                    </div>
-                    <span className="text-gray-400 font-mono">{f.frequencia}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Right column: Most delayed */}
-            <div>
-              <div className="px-3 py-1 border-b border-gray-800/50">
-                <span className="text-[10px] text-gray-500">Mais Atrasados</span>
-              </div>
-              <div className="overflow-y-auto max-h-72">
-                {stats.coldNumbers.slice(0, 15).map((c, i) => (
-                  <div key={c.numero} className="flex items-center justify-between px-3 py-0.5 text-xs border-b border-gray-800/20">
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-gray-600 w-3">{i + 1}</span>
-                      <span className="text-white font-mono">{c.numero}</span>
-                    </div>
-                    <span className="text-gray-400 font-mono">{c.concursosAtrasado}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <FrequencyGrid
-        title="Frequência de Todos os Números (01-60)"
-        data={stats.frequency}
-      />
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-gray-900 border border-gray-800 rounded-lg p-4">
-          <h3 className="text-sm font-medium text-gray-400 mb-3">Distribuição Pares/Ímpares</h3>
-          <ResponsiveContainer width="100%" height={250}>
-            <BarChart data={parityData}>
-              <XAxis dataKey="distribuicao" stroke="#6b7280" fontSize={12} />
-              <YAxis stroke="#6b7280" fontSize={12} />
-              <Tooltip
-                contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '8px', color: '#f9fafb' }}
-              />
-              <Bar dataKey="concursos" fill="#a855f7" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-    </div>
-  );
+  const parityData = Object.entries(stats.parity.evenOddDistribution).map(([key, value]) => ({ distribuicao: key, concursos: value }));
+  return <div className="space-y-6 text-[#17325c]"><header className="border-b border-[#d7e1ee] pb-6"><p className="text-xs font-bold uppercase tracking-[0.16em] text-[#3569b5]">Dados históricos</p><h1 className="mt-1 text-3xl font-bold tracking-tight text-[#0d2d62]">Análise completa</h1><p className="mt-2 max-w-2xl text-sm text-[#49627f]">Explore frequência, atraso e distribuição dos números em todos os concursos disponíveis.</p></header>
+    <div className="grid grid-cols-1 gap-6 xl:grid-cols-2"><section className="overflow-hidden rounded-2xl border border-[#d7e1ee] bg-white shadow-sm"><div className="border-b border-[#d7e1ee] px-5 py-4"><p className="text-xs font-bold uppercase tracking-[0.12em] text-[#3569b5]">Frequência</p><h2 className="mt-1 font-bold">Tabela completa · 01 a 60</h2></div><div className="overflow-x-auto"><table className="min-w-[590px] w-full text-xs"><thead className="bg-[#f4f8fc] text-[#49627f]"><tr>{[0, 1, 2].flatMap(group => ['Nº', 'Vezes', '%'].map(label => <th key={`${group}-${label}`} className="px-3 py-2.5 text-left font-bold">{label}</th>))}</tr></thead><tbody>{Array.from({ length: 20 }, (_, row) => <tr key={row} className="border-t border-[#e4edf5] hover:bg-[#f8fbfe]">{[0, 1, 2].map(col => { const idx = row + col * 20; const item = sortedByNumber[idx]; return item ? <Fragment key={idx}><td className="px-3 py-1.5 font-mono font-semibold text-[#17325c]">{item.numero}</td><td className="px-3 py-1.5 font-mono text-[#075ca8]">{item.frequencia}</td><td className="px-3 py-1.5 font-mono text-[#7184a1]">{item.porcentagem}%</td></Fragment> : <td key={idx} colSpan={3} />; })}</tr>)}</tbody></table></div></section>
+      <section className="overflow-hidden rounded-2xl border border-[#d7e1ee] bg-white shadow-sm"><div className="border-b border-[#d7e1ee] px-5 py-4"><p className="text-xs font-bold uppercase tracking-[0.12em] text-[#3569b5]">Destaques</p><h2 className="mt-1 font-bold">Top 15 números</h2></div><div className="grid grid-cols-2 divide-x divide-[#d7e1ee]"><RankedList title="Mais frequentes" items={stats.frequency.slice(0, 15).map(item => ({ number: item.numero, value: item.frequencia }))} valueLabel="vezes" /><RankedList title="Mais atrasados" items={stats.coldNumbers.slice(0, 15).map(item => ({ number: item.numero, value: item.concursosAtrasado }))} valueLabel="concursos" /></div></section></div>
+    <div className="rounded-2xl border border-[#d7e1ee] bg-white shadow-sm [&>div]:border-0 [&>div]:bg-transparent"><FrequencyGrid title="Frequência de todos os números (01–60)" data={stats.frequency} /></div>
+    <section className="rounded-2xl border border-[#d7e1ee] bg-white p-5 shadow-sm"><div className="mb-4 flex items-center gap-2"><ChartNoAxesColumnIncreasing size={18} className="text-[#075ca8]" aria-hidden="true" /><div><p className="text-xs font-bold uppercase tracking-[0.12em] text-[#3569b5]">Distribuição</p><h2 className="font-bold">Pares e ímpares por concurso</h2></div></div><ResponsiveContainer width="100%" height={260}><BarChart data={parityData}><XAxis dataKey="distribuicao" stroke="#7184a1" fontSize={12} /><YAxis stroke="#7184a1" fontSize={12} /><Tooltip contentStyle={chartTooltip} /><Bar dataKey="concursos" fill="#075ca8" radius={[6, 6, 0, 0]} /></BarChart></ResponsiveContainer></section></div>;
 }
+
+function RankedList({ title, items, valueLabel }: { title: string; items: Array<{ number: string; value: number }>; valueLabel: string }) { return <div><h3 className="border-b border-[#d7e1ee] bg-[#f4f8fc] px-4 py-3 text-xs font-bold uppercase tracking-[0.08em] text-[#49627f]">{title}</h3><ol>{items.map((item, index) => <li key={item.number} className="flex items-center justify-between border-b border-[#e4edf5] px-4 py-2.5 last:border-0"><div className="flex items-center gap-2"><span className="w-4 text-xs text-[#7184a1]">{index + 1}</span><span className="font-mono font-semibold text-[#17325c]">{item.number}</span></div><span className="text-xs text-[#49627f]"><strong className="font-mono text-[#075ca8]">{item.value}</strong> {valueLabel}</span></li>)}</ol></div>; }
