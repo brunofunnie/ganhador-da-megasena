@@ -6,9 +6,16 @@ async function apiFetch<T>(path: string): Promise<T> {
   return res.json();
 }
 
+export interface LatestDraw {
+  concurso: number;
+  data: string;
+  dezenas: string[];
+}
+
 export interface StatusResponse {
   totalDraws: number;
   latestConcurso: number;
+  latestDraw: LatestDraw | null;
   lastSync: string | null;
 }
 

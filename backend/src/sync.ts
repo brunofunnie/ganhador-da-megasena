@@ -45,12 +45,15 @@ export async function syncResults(): Promise<{ inserted: number; total: number }
 export function getSyncStatus() {
   const db = getDb();
   const count = db.prepare('SELECT COUNT(*) as count FROM draws').get() as { count: number };
-  const latest = db.prepare('SELECT MAX(concurso) as max FROM draws').get() as { max: number };
+  const latest = db.prepare('SELECT concurso, data, dezenas FROM draws ORDER BY concurso DESC LIMIT 1').get() as { concurso: number; data: string; dezenas: string } | undefined;
   const lastSync = db.prepare("SELECT value FROM sync_meta WHERE key = 'last_sync'").get() as { value: string } | undefined;
 
   return {
     totalDraws: count.count,
-    latestConcurso: latest.max || 0,
+    latestConcurso: latest?.concurso || 0,
+    latestDraw: latest
+      ? { concurso: latest.concurso, data: latest.data, dezenas: JSON.parse(latest.dezenas) as string[] }
+      : null,
     lastSync: lastSync?.value || null
   };
 }

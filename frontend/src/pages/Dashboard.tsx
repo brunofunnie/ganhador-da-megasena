@@ -1,6 +1,7 @@
 import { useStatistics } from '../hooks/useStatistics';
 import { useStatus } from '../hooks/useStatus';
 import { StatsCard } from '../components/StatsCard';
+import { NumberBall } from '../components/NumberBall';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 
 export function Dashboard() {
@@ -24,6 +25,24 @@ export function Dashboard() {
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold text-white">Painel</h1>
+
+      {status?.latestDraw && (
+        <div className="bg-gray-900 border border-gray-800 rounded-lg p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-medium text-gray-400">Último Sorteio</h3>
+            <span className="text-xs text-gray-500">
+              Concurso {status.latestDraw.concurso} · {status.latestDraw.data}
+            </span>
+          </div>
+          <div className="flex gap-3 flex-wrap">
+            {[...status.latestDraw.dezenas]
+              .sort((a, b) => Number(a) - Number(b))
+              .map((d) => (
+                <NumberBall key={d} number={d} size="lg" />
+              ))}
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <StatsCard
