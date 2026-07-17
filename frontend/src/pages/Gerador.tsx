@@ -1,31 +1,282 @@
-import { useState, useCallback } from 'react';
-import { Dice5, FlaskConical, WandSparkles } from 'lucide-react';
-import { fetchGenerate, fetchSimulate } from '../lib/api';
-import type { GenerateResponse, SimulationResponse } from '../lib/api';
+import { useCallback, useState } from 'react';
+import { Dice5, WandSparkles } from 'lucide-react';
+import { fetchGenerate, fetchSimulate, saveNumbers, type GenerateResponse, type SimulationResponse } from '../lib/api';
 import { GameCard } from '../components/GameCard';
-import { NumberBall } from '../components/NumberBall';
+import { NumberPicker } from '../components/NumberPicker';
+import { SimulationDrawer } from '../components/SimulationDrawer';
+import { useQueryClient } from '@tanstack/react-query';
 
 const MODES = [
-  { value: 'random', label: 'Aleatório Puro' }, { value: 'hot', label: 'Quentes (mais sorteados)' }, { value: 'cold', label: 'Frios (mais atrasados)' }, { value: 'balanced', label: 'Balanceado (3P-3I)' }, { value: 'genetic', label: 'Genético (Quentes + Frios)' }, { value: 'sequences', label: 'Sequências (Primos/Fibonacci)' }, { value: 'fechamento', label: 'Fechamento' }, { value: 'dreams', label: 'Sonhos (com seed)' },
+  { value: 'random', label: 'Aleatório Puro' },
+  { value: 'hot', label: 'Quentes (mais sorteados)' },
+  { value: 'cold', label: 'Frios (mais atrasados)' },
+  { value: 'balanced', label: 'Balanceado (3P-3I)' },
+  { value: 'genetic', label: 'Genético (Quentes + Frios)' },
+  { value: 'sequences', label: 'Sequências (Primos/Fibonacci)' },
+  { value: 'fechamento', label: 'Fechamento' },
+  { value: 'dreams', label: 'Sonhos (com seed)' },
 ];
 
-const fieldClass = 'mt-1.5 w-full rounded-xl border border-[#c9d8e8] bg-white px-3 py-2.5 text-sm text-[#17325c] shadow-sm outline-none transition placeholder:text-[#7184a1] focus:border-[#075ca8] focus:ring-2 focus:ring-[#075ca8]/20 disabled:bg-[#edf3f8]';
+const fieldClass =
+  'mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-800 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20 disabled:bg-slate-100';
 
 export function Gerador() {
-  const [mode, setMode] = useState('random'); const [count, setCount] = useState(1); const [fixed, setFixed] = useState(''); const [exclude, setExclude] = useState(''); const [seed, setSeed] = useState('');
-  const [results, setResults] = useState<GenerateResponse | null>(null); const [loading, setLoading] = useState(false); const [error, setError] = useState<string | null>(null);
-  const [simMode, setSimMode] = useState('historical'); const [randomCount, setRandomCount] = useState(1000); const [simResult, setSimResult] = useState<SimulationResponse | null>(null); const [simLoading, setSimLoading] = useState(false); const [simError, setSimError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+  const [mode, setMode] = useState('random');
+  const [count, setCount] = useState(1);
+  const [fixed, setFixed] = useState('');
+  const [exclude, setExclude] = useState('');
+  const [seed, setSeed] = useState('');
+  const [results, setResults] = useState<GenerateResponse | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleGenerate = useCallback(async () => { setLoading(true); setError(null); try { setResults(await fetchGenerate({ mode, count, fixed: fixed || undefined, exclude: exclude || undefined, seeds: seed || undefined })); } catch (err) { console.error(err); setError('Não foi possível gerar os jogos. Revise os números informados e tente novamente.'); } finally { setLoading(false); } }, [mode, count, fixed, exclude, seed]);
-  const simulate = useCallback(async (numbers: string) => { setSimLoading(true); setSimError(null); try { setSimResult(await fetchSimulate({ numbers, mode: simMode, count: simMode === 'random' ? randomCount : undefined })); } catch (err) { console.error(err); setSimError('Não foi possível executar a simulação. Tente novamente em instantes.'); } finally { setSimLoading(false); } }, [simMode, randomCount]);
-  const handleSimulateGame = useCallback((numbers: string[]) => simulate(numbers.join(',')), [simulate]);
-  const handleSimulateAll = useCallback(() => { if (results?.jogos.length) void simulate(results.jogos.map(j => j.join(',')).join(';')); }, [results, simulate]);
+  const [simMode, setSimMode] = useState('historical');
+  const [randomCount, setRandomCount] = useState(1000);
+  const [simResult, setSimResult] = useState<SimulationResponse | null>(null);
+  const [simLoading, setSimLoading] = useState(false);
+  const [simError, setSimError] = useState<string | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
-  return <div className="space-y-6 text-[#17325c]"><header className="border-b border-[#d7e1ee] pb-6"><p className="text-xs font-bold uppercase tracking-[0.16em] text-[#3569b5]">Estratégias de jogo</p><h1 className="mt-1 text-3xl font-bold tracking-tight text-[#0d2d62]">Gerador & simulador</h1><p className="mt-2 max-w-2xl text-sm text-[#49627f]">Monte combinações com base na estratégia escolhida e compare o desempenho antes de jogar.</p></header>
-    <div className="grid grid-cols-1 gap-6 lg:grid-cols-2"><section className="rounded-2xl border border-[#d7e1ee] bg-white p-5 shadow-sm"><div className="mb-5 flex gap-3"><span className="rounded-xl bg-[#e6f0fb] p-2 text-[#075ca8]"><WandSparkles size={20} aria-hidden="true" /></span><div><h2 className="font-bold">Gerador de números</h2><p className="text-sm text-[#49627f]">Configure sua combinação.</p></div></div><div className="space-y-4"><label className="block text-sm font-semibold">Modo<select value={mode} onChange={e => setMode(e.target.value)} className={fieldClass}>{MODES.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}</select></label><label className="block text-sm font-semibold">Quantidade de jogos <span className="font-normal text-[#49627f]">(1–10)</span><input type="number" min={1} max={10} value={count} onChange={e => setCount(Math.max(1, Math.min(10, parseInt(e.target.value) || 1)))} className={fieldClass} /></label><label className="block text-sm font-semibold">Números fixos <span className="font-normal text-[#49627f]">(opcional)</span><input type="text" value={fixed} onChange={e => setFixed(e.target.value)} placeholder="01,15,30" className={fieldClass} /></label><label className="block text-sm font-semibold">Números excluídos <span className="font-normal text-[#49627f]">(opcional)</span><input type="text" value={exclude} onChange={e => setExclude(e.target.value)} placeholder="58,59,60" className={fieldClass} /></label>{mode === 'dreams' && <label className="block text-sm font-semibold">Números semente<input type="text" value={seed} onChange={e => setSeed(e.target.value)} placeholder="07,13,21" className={fieldClass} /></label>}{error && <p role="alert" className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{error}</p>}<button onClick={handleGenerate} disabled={loading} className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#075ca8] px-5 py-3 font-bold text-white transition hover:bg-[#064c8c] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#075ca8] disabled:cursor-not-allowed disabled:bg-[#8ba4c0]"><Dice5 size={18} aria-hidden="true" />{loading ? 'Gerando jogos...' : 'Gerar números'}</button></div></section>
-      <section className="rounded-2xl border border-[#d7e1ee] bg-white p-5 shadow-sm"><div className="mb-5 flex gap-3"><span className="rounded-xl bg-[#fff4cf] p-2 text-[#a86500]"><FlaskConical size={20} aria-hidden="true" /></span><div><h2 className="font-bold">Simulador</h2><p className="text-sm text-[#49627f]">Use os jogos gerados para comparar resultados.</p></div></div><div className="space-y-4"><label className="block text-sm font-semibold">Modo de simulação<select value={simMode} onChange={e => setSimMode(e.target.value)} className={fieldClass}><option value="historical">Contra histórico real</option><option value="random">Sorteios aleatórios</option></select></label>{simMode === 'random' && <label className="block text-sm font-semibold">Quantidade de sorteios<input type="number" min={100} max={100000} step={100} value={randomCount} onChange={e => setRandomCount(parseInt(e.target.value) || 1000)} className={fieldClass} /></label>}<div className="rounded-xl bg-[#f4f8fc] p-4 text-sm leading-6 text-[#49627f]">Depois de gerar seus números, use <strong className="text-[#17325c]">Simular este jogo</strong> ou <strong className="text-[#17325c]">Simular todos</strong> nos resultados.</div></div></section></div>
-    {(results || simResult || simError) && <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">{results && <section className="rounded-2xl border border-[#d7e1ee] bg-white p-5 shadow-sm"><div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-xs font-bold uppercase tracking-[0.12em] text-[#3569b5]">Combinações geradas</p><p className="mt-1 text-sm text-[#49627f]">Modo: <span className="capitalize text-[#17325c]">{results.modo}</span></p></div>{results.jogos.length > 1 && <button onClick={handleSimulateAll} disabled={simLoading} className="rounded-lg border border-[#075ca8] px-3 py-2 text-sm font-bold text-[#075ca8] transition hover:bg-[#e6f0fb] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#075ca8] disabled:cursor-not-allowed disabled:border-[#aabbd0] disabled:text-[#7184a1]">{simLoading ? 'Simulando todos...' : 'Simular todos'}</button>}</div><div className="space-y-3">{results.jogos.map((jogo, i) => <GameCard key={i} numbers={jogo} index={i} action={<button onClick={() => handleSimulateGame(jogo)} disabled={simLoading} className="rounded-lg bg-[#075ca8] px-3 py-1.5 text-xs font-bold text-white hover:bg-[#064c8c] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#075ca8] disabled:bg-[#8ba4c0]">{simLoading ? 'Simulando...' : 'Simular este jogo'}</button>} />)}</div></section>}{simError && <p role="alert" className="rounded-2xl border border-red-200 bg-red-50 p-5 text-sm text-red-800">{simError}</p>}{simResult && <SimulationTable result={simResult} />}</div>}
-  </div>;
+  const [savingKey, setSavingKey] = useState<string | null>(null);
+  const [savedKeys, setSavedKeys] = useState<Record<string, boolean>>({});
+
+  const handleGenerate = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      setResults(
+        await fetchGenerate({
+          mode,
+          count,
+          fixed: fixed || undefined,
+          exclude: exclude || undefined,
+          seeds: seed || undefined,
+        }),
+      );
+    } catch (err) {
+      console.error(err);
+      setError('Não foi possível gerar os jogos. Revise os números informados e tente novamente.');
+    } finally {
+      setLoading(false);
+    }
+  }, [mode, count, fixed, exclude, seed]);
+
+  const simulate = useCallback(
+    async (numbers: string) => {
+      setSimLoading(true);
+      setSimError(null);
+      setDrawerOpen(true);
+      try {
+        setSimResult(
+          await fetchSimulate({
+            numbers,
+            mode: simMode,
+            count: simMode === 'random' ? randomCount : undefined,
+          }),
+        );
+      } catch (err) {
+        console.error(err);
+        setSimError('Não foi possível executar a simulação. Tente novamente em instantes.');
+      } finally {
+        setSimLoading(false);
+      }
+    },
+    [simMode, randomCount],
+  );
+
+  const handleSimulateGame = useCallback((numbers: string[]) => {
+    setSimResult(null);
+    void simulate(numbers.join(','));
+  }, [simulate]);
+
+  const handleSimulateAll = useCallback(() => {
+    if (results?.jogos.length) {
+      setSimResult(null);
+      void simulate(results.jogos.map((jogo) => jogo.join(',')).join(';'));
+    }
+  }, [results, simulate]);
+
+  const handleSaveGame = useCallback(
+    async (numbers: string[]) => {
+      const key = numbers.join(',');
+      setSavingKey(key);
+      try {
+        await saveNumbers(numbers);
+        setSavedKeys((current) => ({ ...current, [key]: true }));
+        await queryClient.invalidateQueries({ queryKey: ['saved-numbers'] });
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setSavingKey(null);
+      }
+    },
+    [queryClient],
+  );
+
+  return (
+    <div className="space-y-6 text-slate-800">
+      <header className="border-b border-slate-200 pb-6">
+        <p className="text-xs font-bold uppercase tracking-[0.16em] text-blue-600">Estratégias de jogo</p>
+        <h1 className="mt-1 text-3xl font-bold tracking-tight text-slate-900">Gerador & simulador</h1>
+        <p className="mt-2 max-w-2xl text-sm text-slate-500">
+          Monte combinações com base na estratégia escolhida e compare o desempenho antes de jogar.
+        </p>
+      </header>
+
+      <section className="surface-card p-5 shadow-sm">
+        <div className="mb-5 flex gap-3">
+          <span className="rounded-xl bg-blue-50 p-2 text-blue-700">
+            <WandSparkles size={20} aria-hidden="true" />
+          </span>
+          <div>
+            <h2 className="font-bold text-slate-900">Gerador de números</h2>
+            <p className="text-sm text-slate-500">Configure sua combinação.</p>
+          </div>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <label className="block text-sm font-semibold text-slate-800">
+            Modo
+            <select value={mode} onChange={(event) => setMode(event.target.value)} className={fieldClass}>
+              {MODES.map((item) => (
+                <option key={item.value} value={item.value}>
+                  {item.label}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="block text-sm font-semibold text-slate-800">
+            Quantidade de jogos <span className="font-normal text-slate-500">(1–10)</span>
+            <input
+              type="number"
+              min={1}
+              max={10}
+              value={count}
+              onChange={(event) => setCount(Math.max(1, Math.min(10, parseInt(event.target.value) || 1)))}
+              className={fieldClass}
+            />
+          </label>
+
+          <div className="block text-sm font-semibold text-slate-800">
+            <span className="block">
+              Números fixos <span className="font-normal text-slate-500">(opcional)</span>
+            </span>
+            <div className="mt-1.5 flex gap-2">
+              <input
+                type="text"
+                value={fixed}
+                onChange={(event) => setFixed(event.target.value)}
+                placeholder="01,15,30"
+                className={`${fieldClass} mt-0 flex-1`}
+              />
+              <NumberPicker value={fixed} onChange={setFixed}>
+                <button
+                  type="button"
+                  className="shrink-0 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-bold text-blue-700 transition hover:bg-blue-50"
+                >
+                  Selecionar
+                </button>
+              </NumberPicker>
+            </div>
+          </div>
+
+          <div className="block text-sm font-semibold text-slate-800">
+            <span className="block">
+              Números excluídos <span className="font-normal text-slate-500">(opcional)</span>
+            </span>
+            <div className="mt-1.5 flex gap-2">
+              <input
+                type="text"
+                value={exclude}
+                onChange={(event) => setExclude(event.target.value)}
+                placeholder="58,59,60"
+                className={`${fieldClass} mt-0 flex-1`}
+              />
+              <NumberPicker value={exclude} onChange={setExclude}>
+                <button
+                  type="button"
+                  className="shrink-0 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-bold text-blue-700 transition hover:bg-blue-50"
+                >
+                  Selecionar
+                </button>
+              </NumberPicker>
+            </div>
+          </div>
+
+          {mode === 'dreams' && (
+            <label className="block text-sm font-semibold text-slate-800 sm:col-span-2">
+              Números semente
+              <input
+                type="text"
+                value={seed}
+                onChange={(event) => setSeed(event.target.value)}
+                placeholder="07,13,21"
+                className={fieldClass}
+              />
+            </label>
+          )}
+        </div>
+
+        {error && (
+          <p role="alert" className="mt-4 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+            {error}
+          </p>
+        )}
+
+        <button
+          onClick={handleGenerate}
+          disabled={loading}
+          className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-blue-700 px-5 py-3 font-bold text-white transition hover:bg-blue-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 disabled:cursor-not-allowed disabled:bg-slate-400"
+        >
+          <Dice5 size={18} aria-hidden="true" />
+          {loading ? 'Gerando jogos...' : 'Gerar números'}
+        </button>
+      </section>
+
+      {results && (
+        <section className="surface-card p-5 shadow-sm">
+          <div className="mb-4 flex items-start justify-between">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.12em] text-blue-600">Combinações geradas</p>
+              <p className="mt-1 text-sm text-slate-500">
+                Modo: <span className="capitalize text-slate-800">{results.modo}</span>
+              </p>
+            </div>
+            {results.jogos.length > 1 && (
+              <button
+                onClick={handleSimulateAll}
+                disabled={simLoading}
+                className="rounded-lg border border-blue-700 px-3 py-2 text-sm font-bold text-blue-700 transition hover:bg-blue-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 disabled:cursor-not-allowed disabled:border-slate-300 disabled:text-slate-400"
+              >
+                {simLoading ? 'Simulando todos...' : 'Simular todos'}
+              </button>
+            )}
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            {results.jogos.map((jogo, index) => (
+              <GameCard key={index} numbers={jogo} index={index} onSimulate={handleSimulateGame} ballSize="sm" />
+            ))}
+          </div>
+        </section>
+      )}
+
+      <SimulationDrawer
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        result={simResult}
+        loading={simLoading}
+        error={simError}
+        simMode={simMode}
+        onSimModeChange={setSimMode}
+        randomCount={randomCount}
+        onRandomCountChange={setRandomCount}
+        onSaveGame={handleSaveGame}
+        savingKey={savingKey}
+        savedKeys={savedKeys}
+      />
+    </div>
+  );
 }
-
-function SimulationTable({ result }: { result: SimulationResponse }) { return <section className="overflow-hidden rounded-2xl border border-[#d7e1ee] bg-white shadow-sm"><div className="p-5"><p className="text-xs font-bold uppercase tracking-[0.12em] text-[#3569b5]">Resultado da simulação</p><h2 className="mt-1 font-bold">{result.totalConcursos.toLocaleString('pt-BR')} concursos · {result.modo}</h2></div><div className="overflow-x-auto"><table className="min-w-[620px] w-full text-sm"><thead className="bg-[#073e82] text-white"><tr><th className="px-4 py-3 text-left font-semibold">Jogo</th><th className="px-4 py-3 text-center font-semibold">Números</th>{['6', '5', '4', '3'].map(k => <th key={k} className="px-3 py-3 text-center font-semibold">{k} acertos</th>)}</tr></thead><tbody>{result.jogos.map((jogo, i) => <tr key={i} className="border-b border-[#e4edf5] last:border-0 hover:bg-[#f4f8fc]"><td className="px-4 py-3 font-mono text-[#49627f]">#{i + 1}</td><td className="px-4 py-3"><div className="flex min-w-max justify-center gap-1">{jogo.numeros.map(n => <NumberBall key={n} number={n} size="sm" />)}</div></td>{['6', '5', '4', '3'].map(k => <td key={k} className="px-3 py-3 text-center font-mono"><span className="block font-semibold text-[#17325c]">{jogo.acertos[k]?.toLocaleString('pt-BR') ?? 0}</span><span className="text-xs text-[#7184a1]">{jogo.porcentagens[k]?.toFixed(2)}%</span></td>)}</tr>)}</tbody></table></div></section>; }
