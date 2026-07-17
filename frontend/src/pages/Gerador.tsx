@@ -37,6 +37,7 @@ export function Gerador() {
   const [simLoading, setSimLoading] = useState(false);
   const [simError, setSimError] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [drawerGames, setDrawerGames] = useState<string[][]>([]);
 
   const [savingKey, setSavingKey] = useState<string | null>(null);
   const [savedKeys, setSavedKeys] = useState<Record<string, boolean>>({});
@@ -62,40 +63,39 @@ export function Gerador() {
     }
   }, [mode, count, fixed, exclude, seed]);
 
-  const simulate = useCallback(
-    async (numbers: string) => {
-      setSimLoading(true);
-      setSimError(null);
-      setDrawerOpen(true);
-      try {
-        setSimResult(
-          await fetchSimulate({
-            numbers,
-            mode: simMode,
-            count: simMode === 'random' ? randomCount : undefined,
-          }),
-        );
-      } catch (err) {
-        console.error(err);
-        setSimError('Não foi possível executar a simulação. Tente novamente em instantes.');
-      } finally {
-        setSimLoading(false);
-      }
-    },
-    [simMode, randomCount],
-  );
-
-  const handleSimulateGame = useCallback((numbers: string[]) => {
+  const handleRunSimulation = useCallback(async () => {
+    if (drawerGames.length === 0) return;
+    setSimLoading(true);
+    setSimError(null);
     setSimResult(null);
-    void simulate(numbers.join(','));
-  }, [simulate]);
+    try {
+      setSimResult(
+        await fetchSimulate({
+          numbers: drawerGames.map((jogo) => jogo.join(',')).join(';'),
+          mode: simMode,
+          count: simMode === 'random' ? randomCount : undefined,
+        }),
+      );
+    } catch (err) {
+      console.error(err);
+      setSimError('Não foi possível executar a simulação. Tente novamente em instantes.');
+    } finally {
+      setSimLoading(false);
+    }
+  }, [drawerGames, simMode, randomCount]);
+
+  const handleSimulateGame = useCallback((numbers: string[][]) => {
+    setSimResult(null);
+    setSimError(null);
+    setDrawerGames(numbers);
+    setDrawerOpen(true);
+  }, []);
 
   const handleSimulateAll = useCallback(() => {
     if (results?.jogos.length) {
-      setSimResult(null);
-      void simulate(results.jogos.map((jogo) => jogo.join(',')).join(';'));
+      handleSimulateGame(results.jogos);
     }
-  }, [results, simulate]);
+  }, [results, handleSimulateGame]);
 
   const handleSaveGame = useCallback(
     async (numbers: string[]) => {
@@ -255,9 +255,15 @@ export function Gerador() {
             )}
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-3 sm:grid-cols-2">
             {results.jogos.map((jogo, index) => (
-              <GameCard key={index} numbers={jogo} index={index} onSimulate={handleSimulateGame} ballSize="sm" />
+              <GameCard
+                key={index}
+                numbers={jogo}
+                index={index}
+                onSimulate={(numbers) => handleSimulateGame([numbers])}
+                ballSize="sm"
+              />
             ))}
           </div>
         </section>
@@ -266,6 +272,7 @@ export function Gerador() {
       <SimulationDrawer
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
+        games={drawerGames}
         result={simResult}
         loading={simLoading}
         error={simError}
@@ -273,6 +280,7 @@ export function Gerador() {
         onSimModeChange={setSimMode}
         randomCount={randomCount}
         onRandomCountChange={setRandomCount}
+        onRunSimulation={handleRunSimulation}
         onSaveGame={handleSaveGame}
         savingKey={savingKey}
         savedKeys={savedKeys}
