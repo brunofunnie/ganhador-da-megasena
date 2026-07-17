@@ -118,52 +118,37 @@ export function SimulationDrawer({
               </div>
             )}
             {result && !loading && (
-              <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-                <div className="overflow-x-auto">
-                  <table className="min-w-[420px] w-full text-sm">
-                    <thead className="bg-[#0a376c] text-white">
-                      <tr>
-                        <th className="px-3 py-3 text-left font-semibold">Jogo</th>
-                        <th className="px-3 py-3 text-center font-semibold">Números</th>
-                        {['6', '5', '4', '3'].map((k) => (
-                          <th key={k} className="px-2 py-3 text-center font-semibold">{k} acertos</th>
-                        ))}
-                        <th className="px-3 py-3 text-center font-semibold">Salvar</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {result.jogos.map((jogo, index) => (
-                        <tr key={index} className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
-                          <td className="px-3 py-3 font-mono text-slate-500">#{index + 1}</td>
-                          <td className="px-3 py-3">
-                            <div className="flex min-w-max justify-center gap-1">
-                              {jogo.numeros.map((n) => (
-                                <NumberBall key={n} number={n} size="sm" />
-                              ))}
-                            </div>
-                          </td>
-                          {['6', '5', '4', '3'].map((k) => (
-                            <td key={k} className="px-2 py-3 text-center font-mono">
-                              <span className="block font-semibold text-slate-800">{jogo.acertos[k]?.toLocaleString('pt-BR') ?? 0}</span>
-                              <span className="text-xs text-slate-400">{jogo.porcentagens[k]?.toFixed(2)}%</span>
-                            </td>
-                          ))}
-                          <td className="px-3 py-3 text-center">
-                            <button
-                              type="button"
-                              onClick={() => onSaveGame(jogo.numeros)}
-                              disabled={savingKey === jogo.numeros.join(',')}
-                              className="inline-flex items-center gap-1 rounded-lg border border-blue-700 px-2 py-1.5 text-xs font-bold text-blue-700 transition hover:bg-blue-50 disabled:opacity-50"
-                            >
-                              <Save size={13} />
-                              {savedKeys[jogo.numeros.join(',')] ? 'Salvo' : savingKey === jogo.numeros.join(',') ? '...' : 'Salvar'}
-                            </button>
-                          </td>
-                        </tr>
+              <div className="space-y-3">
+                {result.jogos.map((jogo, index) => (
+                  <div key={index} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                    <div className="mb-3 flex items-center justify-between">
+                      <span className="rounded-md bg-blue-50 px-2 py-1 text-xs font-bold text-blue-800">Jogo {index + 1}</span>
+                      <button
+                        type="button"
+                        onClick={() => onSaveGame(jogo.numeros)}
+                        disabled={savingKey === jogo.numeros.join(',')}
+                        className="inline-flex items-center gap-1 rounded-lg border border-blue-700 px-2 py-1.5 text-xs font-bold text-blue-700 transition hover:bg-blue-50 disabled:opacity-50"
+                      >
+                        <Save size={13} />
+                        {savedKeys[jogo.numeros.join(',')] ? 'Salvo' : savingKey === jogo.numeros.join(',') ? '...' : 'Salvar'}
+                      </button>
+                    </div>
+                    <div className="mb-3 flex flex-wrap justify-center gap-1">
+                      {jogo.numeros.map((n) => (
+                        <NumberBall key={n} number={n} size="sm" />
                       ))}
-                    </tbody>
-                  </table>
-                </div>
+                    </div>
+                    <div className="grid grid-cols-4 gap-2 rounded-xl bg-slate-50 p-2">
+                      {['6', '5', '4', '3'].map((k) => (
+                        <div key={k} className="text-center">
+                          <p className="text-[0.65rem] font-bold uppercase tracking-wider text-slate-500">{k} acertos</p>
+                          <p className="font-mono font-semibold text-slate-800">{jogo.acertos[k]?.toLocaleString('pt-BR') ?? 0}</p>
+                          <p className="text-xs text-slate-400">{jogo.porcentagens[k]?.toFixed(2)}%</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </div>
