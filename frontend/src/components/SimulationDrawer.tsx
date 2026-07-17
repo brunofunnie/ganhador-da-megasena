@@ -40,7 +40,7 @@ export function SimulationDrawer({
     <Drawer.Root open={open} onOpenChange={(next) => !next && onClose()}>
       <Drawer.Portal>
         <Drawer.Backdrop className="fixed inset-0 z-40 bg-slate-900/40 transition-opacity data-[open]:opacity-100 data-[closed]:opacity-0" />
-        <Drawer.Popup className="fixed inset-y-0 right-0 z-50 flex h-full w-[480px] max-w-[95vw] flex-col bg-white shadow-xl outline-none will-change-transform data-[open]:translate-x-0 data-[closed]:translate-x-full">
+        <Drawer.Popup className="fixed inset-y-0 right-0 z-50 flex h-full w-[640px] max-w-[95vw] flex-col bg-white shadow-xl outline-none will-change-transform data-[open]:translate-x-0 data-[closed]:translate-x-full">
           <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
             <div>
               <p className="text-[0.68rem] font-extrabold uppercase tracking-[0.14em] text-blue-700">Simulação</p>
@@ -118,35 +118,41 @@ export function SimulationDrawer({
               </div>
             )}
             {result && !loading && (
-              <div className="space-y-3">
+              <div className="space-y-2">
+                <div className="grid grid-cols-[3rem_1fr_repeat(4,4.5rem)_4rem] items-center gap-2 rounded-xl bg-[#0a376c] px-3 py-2 text-xs font-bold text-white">
+                  <span>#</span>
+                  <span>Números</span>
+                  {['6', '5', '4', '3'].map((k) => (
+                    <span key={k} className="text-center">{k}</span>
+                  ))}
+                  <span className="text-center">Salvar</span>
+                </div>
                 {result.jogos.map((jogo, index) => (
-                  <div key={index} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                    <div className="mb-3 flex items-center justify-between">
-                      <span className="rounded-md bg-blue-50 px-2 py-1 text-xs font-bold text-blue-800">Jogo {index + 1}</span>
-                      <button
-                        type="button"
-                        onClick={() => onSaveGame(jogo.numeros)}
-                        disabled={savingKey === jogo.numeros.join(',')}
-                        className="inline-flex items-center gap-1 rounded-lg border border-blue-700 px-2 py-1.5 text-xs font-bold text-blue-700 transition hover:bg-blue-50 disabled:opacity-50"
-                      >
-                        <Save size={13} />
-                        {savedKeys[jogo.numeros.join(',')] ? 'Salvo' : savingKey === jogo.numeros.join(',') ? '...' : 'Salvar'}
-                      </button>
-                    </div>
-                    <div className="mb-3 flex flex-wrap justify-center gap-1">
+                  <div
+                    key={index}
+                    className="grid grid-cols-[3rem_1fr_repeat(4,4.5rem)_4rem] items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm"
+                  >
+                    <span className="font-mono text-sm font-semibold text-slate-500">#{index + 1}</span>
+                    <div className="flex flex-wrap gap-1">
                       {jogo.numeros.map((n) => (
                         <NumberBall key={n} number={n} size="sm" />
                       ))}
                     </div>
-                    <div className="grid grid-cols-4 gap-2 rounded-xl bg-slate-50 p-2">
-                      {['6', '5', '4', '3'].map((k) => (
-                        <div key={k} className="text-center">
-                          <p className="text-[0.65rem] font-bold uppercase tracking-wider text-slate-500">{k} acertos</p>
-                          <p className="font-mono font-semibold text-slate-800">{jogo.acertos[k]?.toLocaleString('pt-BR') ?? 0}</p>
-                          <p className="text-xs text-slate-400">{jogo.porcentagens[k]?.toFixed(2)}%</p>
-                        </div>
-                      ))}
-                    </div>
+                    {['6', '5', '4', '3'].map((k) => (
+                      <div key={k} className="text-center">
+                        <span className="block font-mono text-sm font-semibold text-slate-800">{jogo.acertos[k]?.toLocaleString('pt-BR') ?? 0}</span>
+                        <span className="block text-[0.65rem] text-slate-400">{jogo.porcentagens[k]?.toFixed(2)}%</span>
+                      </div>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => onSaveGame(jogo.numeros)}
+                      disabled={savingKey === jogo.numeros.join(',')}
+                      className="inline-flex items-center justify-center gap-1 rounded-lg border border-blue-700 px-2 py-1 text-xs font-bold text-blue-700 transition hover:bg-blue-50 disabled:opacity-50"
+                    >
+                      <Save size={13} />
+                      {savedKeys[jogo.numeros.join(',')] ? 'Salvo' : savingKey === jogo.numeros.join(',') ? '...' : 'Salvar'}
+                    </button>
                   </div>
                 ))}
               </div>
