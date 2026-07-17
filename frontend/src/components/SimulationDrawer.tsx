@@ -39,8 +39,8 @@ export function SimulationDrawer({
   return (
     <Drawer.Root open={open} onOpenChange={(next) => !next && onClose()}>
       <Drawer.Portal>
-        <Drawer.Backdrop className="fixed inset-0 z-40 bg-slate-900/40 backdrop-blur-sm transition-opacity data-[open]:opacity-100 data-[closed]:opacity-0" />
-        <Drawer.Popup className="fixed inset-y-0 right-0 z-50 flex h-full w-[480px] max-w-[95vw] flex-col bg-white shadow-2xl outline-none transition-transform data-[open]:translate-x-0 data-[closed]:translate-x-full">
+        <Drawer.Backdrop className="fixed inset-0 z-40 bg-slate-900/40 transition-opacity data-[open]:opacity-100 data-[closed]:opacity-0" />
+        <Drawer.Popup className="fixed inset-y-0 right-0 z-50 flex h-full w-[480px] max-w-[95vw] flex-col bg-white shadow-xl outline-none will-change-transform data-[open]:translate-x-0 data-[closed]:translate-x-full">
           <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
             <div>
               <p className="text-[0.68rem] font-extrabold uppercase tracking-[0.14em] text-blue-700">Simulação</p>
@@ -90,7 +90,7 @@ export function SimulationDrawer({
             </button>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-5">
+          <div className="flex-1 overflow-y-auto overscroll-contain p-5">
             {loading && (
               <div className="flex items-center justify-center gap-2 py-10 text-sm text-slate-500">
                 <FlaskConical size={16} className="animate-pulse" />
