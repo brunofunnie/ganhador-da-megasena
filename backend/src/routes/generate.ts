@@ -16,6 +16,11 @@ router.get('/generate', (req: Request, res: Response) => {
     const seedNumbers = req.query.seeds
       ? (req.query.seeds as string).split(',').map(n => n.trim().padStart(2, '0'))
       : [];
+    const iterations = req.query.iterations ? parseInt(req.query.iterations as string) : undefined;
+    const strategies = req.query.strategies
+      ? (req.query.strategies as string).split(',').map(s => s.trim())
+      : undefined;
+    const windowSize = req.query.windowSize ? parseInt(req.query.windowSize as string) : undefined;
 
     if (!GENERATOR_MODES.includes(mode as GeneratorMode)) {
       res.status(400).json({
@@ -29,7 +34,10 @@ router.get('/generate', (req: Request, res: Response) => {
       count,
       fixedNumbers,
       excludeNumbers,
-      seedNumbers
+      seedNumbers,
+      iterations,
+      strategies,
+      windowSize
     });
 
     res.json({ modo: mode, jogos: games });
