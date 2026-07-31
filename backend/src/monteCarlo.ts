@@ -9,10 +9,19 @@ function countMatches(a: string[], b: string[]): number {
   return a.filter(n => setB.has(n)).length;
 }
 
+function shuffleArray<T>(arr: T[]): T[] {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
 function generateRandomDraw(fixed: string[], exclude: string[]): string[] {
   const excluded = new Set([...exclude, ...fixed]);
   const pool = Array.from({ length: 60 }, (_, i) => formatNum(i + 1)).filter(n => !excluded.has(n));
-  const shuffled = [...pool].sort(() => Math.random() - 0.5);
+  const shuffled = shuffleArray(pool);
   return [...fixed, ...shuffled.slice(0, 6 - fixed.length)].sort((a, b) => parseInt(a) - parseInt(b));
 }
 
@@ -24,6 +33,13 @@ export function runMonteCarlo(options: {
 }): { jogos: string[][]; stats: { mediaAcertos: number; maxAcertos: number } } {
   const { iterations, topK, fixedNumbers = [], excludeNumbers = [] } = options;
 
+  if (fixedNumbers.length >= 6) {
+    return {
+      jogos: [fixedNumbers.slice(0, 6).sort((a, b) => parseInt(a) - parseInt(b))],
+      stats: { mediaAcertos: 0, maxAcertos: 0 }
+    };
+  }
+
   const db = getDb();
   const draws = db.prepare('SELECT dezenas FROM draws').all() as { dezenas: string }[];
 
@@ -31,9 +47,9 @@ export function runMonteCarlo(options: {
     const pool = Array.from({ length: 60 }, (_, i) => formatNum(i + 1)).filter(
       n => !new Set([...excludeNumbers, ...fixedNumbers]).has(n)
     );
-    const shuffled = [...pool].sort(() => Math.random() - 0.5);
+    const shuffled = shuffleArray(pool);
     return {
-      jogos: [[...fixedNumbers, ...shuffled.slice(0, 6 - fixedNumbers.length)].sort()],
+      jogos: [[...fixedNumbers, ...shuffled.slice(0, 6 - fixedNumbers.length)].sort((a, b) => parseInt(a) - parseInt(b))],
       stats: { mediaAcertos: 0, maxAcertos: 0 }
     };
   }

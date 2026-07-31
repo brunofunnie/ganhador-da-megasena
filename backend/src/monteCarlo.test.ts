@@ -59,9 +59,19 @@ describe('monteCarlo', () => {
     }
   });
 
-  it('should handle empty draws gracefully', () => {
+});
+
+describe('monteCarlo empty draws', () => {
+  beforeAll(() => {
     closeDb();
     initDb(':memory:');
+  });
+
+  afterAll(() => {
+    closeDb();
+  });
+
+  it('should handle empty draws gracefully', () => {
     const result = runMonteCarlo({ iterations: 10, topK: 1 });
     expect(result.jogos).toHaveLength(1);
     expect(result.jogos[0]).toHaveLength(6);
