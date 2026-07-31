@@ -1,7 +1,12 @@
 import { getDb } from './db';
+import { getTemporalTrend } from './temporalTrend';
+import { runMonteCarlo } from './monteCarlo';
+import { runEnsemble } from './ensemble';
+import { buildMarkovMatrix, generateMarkovChain } from './markov';
 
 export const GENERATOR_MODES = [
-  'random', 'hot', 'cold', 'balanced', 'genetic', 'sequences', 'fechamento', 'dreams'
+  'random', 'hot', 'cold', 'balanced', 'genetic', 'sequences', 'fechamento', 'dreams',
+  'trend', 'monte-carlo', 'ensemble', 'markov'
 ] as const;
 
 export type GeneratorMode = typeof GENERATOR_MODES[number];
@@ -12,6 +17,9 @@ export interface GeneratorOptions {
   fixedNumbers?: string[];
   excludeNumbers?: string[];
   seedNumbers?: string[];
+  iterations?: number;
+  strategies?: string[];
+  windowSize?: number;
 }
 
 function formatNum(n: number): string {
@@ -221,6 +229,44 @@ export function generateNumbers(options: GeneratorOptions): string[][] {
           available.filter(number => !fromSeed.includes(number))
         );
         picked = [...fixedNumbers, ...fromSeed.map(formatNum), ...remaining];
+        break;
+      }
+
+      case 'trend': {
+        const windowSize = options.windowSize || 50;
+        const scores = getTemporalTrend(windowSize);
+        const weightMap = new Map<string, number>();
+        for (const [num, score] of scores) {
+          weightMap.set(num, Math.abs(score) + 0.001);
+        }
+        picked = weightedPick(available, weightMap, 6 - fixedNumbers.length);
+        picked = [...fixedNumbers, ...picked];
+        break;
+      }
+
+      case 'monte-carlo': {
+        const iterations = options.iterations || 10000;
+        const result = runMonteCarlo({
+          iterations,
+          topK: actualCount,
+          fixedNumbers,
+          excludeNumbers
+        });
+        games.push(...result.jogos);
+        continue;
+      }
+
+      case 'ensemble': {
+        const strategies = options.strategies || ['top6', 'cold6', 'balanced-3p3i', 'quadrants', 'primes-power', 'avg-frequency'];
+        const ensembleGames = runEnsemble({ strategyIds: strategies, count: actualCount });
+        games.push(...ensembleGames);
+        continue;
+      }
+
+      case 'markov': {
+        const matrix = buildMarkovMatrix();
+        picked = generateMarkovChain(matrix);
+        picked = [...fixedNumbers, ...picked].slice(0, 6);
         break;
       }
     }

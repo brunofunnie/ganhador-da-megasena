@@ -182,5 +182,9 @@ describe('generators', () => {
     expect(GENERATOR_MODES).toContain('sequences');
     expect(GENERATOR_MODES).toContain('fechamento');
     expect(GENERATOR_MODES).toContain('dreams');
+    expect(GENERATOR_MODES).toContain('trend');
+    expect(GENERATOR_MODES).toContain('monte-carlo');
+    expect(GENERATOR_MODES).toContain('ensemble');
+    expect(GENERATOR_MODES).toContain('markov');
   });
 });
