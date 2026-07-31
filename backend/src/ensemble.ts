@@ -24,13 +24,16 @@ export function runEnsemble(options: {
     .sort((a, b) => b[1] - a[1] || parseInt(a[0]) - parseInt(b[0]));
 
   const games: string[][] = [];
+  const usedGlobal = new Set<string>();
   for (let g = 0; g < count; g++) {
-    const game = sorted.slice(g * 6, g * 6 + 6).map(e => e[0]);
+    let available = sorted.filter(e => !usedGlobal.has(e[0]));
+    if (available.length < 6) available = sorted;
+    const game = available.slice(0, 6).map(e => e[0]);
     if (game.length < 6) {
-      const used = new Set(game);
-      const remaining = sorted.filter(e => !used.has(e[0])).map(e => e[0]);
+      const remaining = sorted.filter(e => !game.includes(e[0])).map(e => e[0]);
       game.push(...remaining.slice(0, 6 - game.length));
     }
+    for (const n of game) usedGlobal.add(n);
     games.push(game.sort((a, b) => parseInt(a) - parseInt(b)));
   }
 

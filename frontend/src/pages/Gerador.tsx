@@ -21,6 +21,9 @@ const MODES = [
   { value: 'markov', label: 'Markov (cadeia de transição)' },
 ];
 
+const ALL_STRATEGIES = ['top6', 'cold6', 'balanced-3p3i', 'quadrants', 'full-cycle', 'sum-target', 'primes-power', 'avg-frequency'] as const;
+const DEFAULT_STRATEGIES = ['top6', 'cold6', 'balanced-3p3i', 'quadrants', 'primes-power', 'avg-frequency'];
+
 const fieldClass =
   'mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-800 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20 disabled:bg-slate-100';
 
@@ -32,7 +35,7 @@ export function Gerador() {
   const [exclude, setExclude] = useState('');
   const [seed, setSeed] = useState('');
   const [iterations, setIterations] = useState(10000);
-  const [strategies, setStrategies] = useState('top6,cold6,balanced-3p3i,quadrants,primes-power,avg-frequency');
+  const [strategies, setStrategies] = useState(DEFAULT_STRATEGIES.join(','));
   const [windowSize, setWindowSize] = useState(50);
   const [results, setResults] = useState<GenerateResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -265,19 +268,31 @@ export function Gerador() {
           )}
 
           {mode === 'ensemble' && (
-            <label className="block text-sm font-semibold text-slate-800 sm:col-span-2">
-              Estratégias
-              <input
-                type="text"
-                value={strategies}
-                onChange={(e) => setStrategies(e.target.value)}
-                placeholder="top6,cold6,balanced-3p3i"
-                className={fieldClass}
-              />
-              <p className="mt-1 text-xs text-slate-400">
-                IDs separados por vírgula. Opções: top6, cold6, balanced-3p3i, quadrants, full-cycle, sum-target, primes-power, avg-frequency
-              </p>
-            </label>
+            <fieldset className="block text-sm font-semibold text-slate-800 sm:col-span-2">
+              <legend className="mb-2">Estratégias</legend>
+              <div className="flex flex-wrap gap-3">
+                {ALL_STRATEGIES.map((s) => {
+                  const checked = strategies.split(',').includes(s);
+                  return (
+                    <label key={s} className="flex items-center gap-1.5 text-sm font-normal text-slate-700">
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => {
+                          const current = strategies.split(',').filter(Boolean);
+                          const next = checked
+                            ? current.filter((x) => x !== s)
+                            : [...current, s];
+                          setStrategies(next.join(','));
+                        }}
+                        className="h-4 w-4 rounded border-slate-300 text-blue-700 focus:ring-blue-600/20"
+                      />
+                      {s}
+                    </label>
+                  );
+                })}
+              </div>
+            </fieldset>
           )}
         </div>
 
