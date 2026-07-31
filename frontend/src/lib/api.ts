@@ -126,24 +126,6 @@ export interface DrawListResponse {
   totalPages: number;
 }
 
-export interface SavedNumbersComparison {
-  concurso: number;
-  data: string;
-  dezenas: string[];
-  hits: number;
-  matches: string[];
-}
-
-export interface SavedNumbersItem {
-  id: number;
-  dezenas: string[];
-  createdAt: string;
-  latestComparison: SavedNumbersComparison | null;
-}
-
-export interface SavedNumbersListResponse {
-  items: SavedNumbersItem[];
-}
 
 export function fetchStatus(): Promise<StatusResponse> {
   return apiFetch('/status');
@@ -207,6 +189,25 @@ export function fetchDrawAnalysis(concurso: number): Promise<DrawAnalysis> {
   return apiFetch(`/draws/${concurso}/analysis`);
 }
 
+export interface SavedNumbersComparison {
+  concurso: number;
+  data: string;
+  dezenas: string[];
+  hits: number;
+  matches: string[];
+}
+
+export interface SavedNumbersItem {
+  id: number;
+  dezenas: string[];
+  createdAt: string;
+  latestComparison: SavedNumbersComparison | null;
+}
+
+export interface SavedNumbersListResponse {
+  items: SavedNumbersItem[];
+}
+
 export function fetchSavedNumbers(): Promise<SavedNumbersListResponse> {
   return apiFetch('/saved-numbers');
 }
@@ -228,3 +229,5 @@ export function deleteSavedNumbers(id: number): Promise<void> {
     throw new Error(`API error: ${res.status}`);
   });
 }
+
+

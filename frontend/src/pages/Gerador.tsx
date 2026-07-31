@@ -71,7 +71,7 @@ export function Gerador() {
     } finally {
       setLoading(false);
     }
-  }, [mode, count, fixed, exclude, seed]);
+    }, [mode, count, fixed, exclude, seed, iterations, strategies, windowSize]);
 
   const handleRunSimulation = useCallback(async () => {
     if (drawerGames.length === 0) return;
