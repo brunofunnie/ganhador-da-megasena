@@ -126,6 +126,25 @@ export interface DrawListResponse {
   totalPages: number;
 }
 
+export interface SavedNumbersComparison {
+  concurso: number;
+  data: string;
+  dezenas: string[];
+  hits: number;
+  matches: string[];
+}
+
+export interface SavedNumbersItem {
+  id: number;
+  dezenas: string[];
+  createdAt: string;
+  latestComparison: SavedNumbersComparison | null;
+}
+
+export interface SavedNumbersListResponse {
+  items: SavedNumbersItem[];
+}
+
 export function fetchStatus(): Promise<StatusResponse> {
   return apiFetch('/status');
 }
@@ -140,6 +159,9 @@ export function fetchGenerate(params: {
   fixed?: string;
   exclude?: string;
   seeds?: string;
+  iterations?: number;
+  strategies?: string;
+  windowSize?: number;
 }): Promise<GenerateResponse> {
   const qs = new URLSearchParams();
   if (params.mode) qs.set('mode', params.mode);
@@ -147,6 +169,9 @@ export function fetchGenerate(params: {
   if (params.fixed) qs.set('fixed', params.fixed);
   if (params.exclude) qs.set('exclude', params.exclude);
   if (params.seeds) qs.set('seeds', params.seeds);
+  if (params.iterations) qs.set('iterations', String(params.iterations));
+  if (params.strategies) qs.set('strategies', params.strategies);
+  if (params.windowSize) qs.set('windowSize', String(params.windowSize));
   return apiFetch(`/generate?${qs.toString()}`);
 }
 
@@ -180,4 +205,26 @@ export function fetchDraw(concurso: number): Promise<DrawRecord> {
 
 export function fetchDrawAnalysis(concurso: number): Promise<DrawAnalysis> {
   return apiFetch(`/draws/${concurso}/analysis`);
+}
+
+export function fetchSavedNumbers(): Promise<SavedNumbersListResponse> {
+  return apiFetch('/saved-numbers');
+}
+
+export function saveNumbers(numbers: string[]): Promise<SavedNumbersItem> {
+  return fetch(`${BASE}/saved-numbers`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ numbers }),
+  }).then(async (res) => {
+    if (!res.ok) throw new Error(`API error: ${res.status}`);
+    return res.json();
+  });
+}
+
+export function deleteSavedNumbers(id: number): Promise<void> {
+  return fetch(`${BASE}/saved-numbers/${id}`, { method: 'DELETE' }).then(async (res) => {
+    if (res.status === 204) return;
+    throw new Error(`API error: ${res.status}`);
+  });
 }

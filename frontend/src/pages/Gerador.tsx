@@ -15,6 +15,10 @@ const MODES = [
   { value: 'sequences', label: 'Sequências (Primos/Fibonacci)' },
   { value: 'fechamento', label: 'Fechamento' },
   { value: 'dreams', label: 'Sonhos (com seed)' },
+  { value: 'trend', label: 'Tendência Temporal' },
+  { value: 'monte-carlo', label: 'Monte Carlo' },
+  { value: 'ensemble', label: 'Ensemble (voto entre estratégias)' },
+  { value: 'markov', label: 'Markov (cadeia de transição)' },
 ];
 
 const fieldClass =
@@ -27,6 +31,9 @@ export function Gerador() {
   const [fixed, setFixed] = useState('');
   const [exclude, setExclude] = useState('');
   const [seed, setSeed] = useState('');
+  const [iterations, setIterations] = useState(10000);
+  const [strategies, setStrategies] = useState('top6,cold6,balanced-3p3i,quadrants,primes-power,avg-frequency');
+  const [windowSize, setWindowSize] = useState(50);
   const [results, setResults] = useState<GenerateResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -53,6 +60,9 @@ export function Gerador() {
           fixed: fixed || undefined,
           exclude: exclude || undefined,
           seeds: seed || undefined,
+          iterations: mode === 'monte-carlo' ? iterations : undefined,
+          strategies: mode === 'ensemble' ? strategies : undefined,
+          windowSize: mode === 'trend' ? windowSize : undefined,
         }),
       );
     } catch (err) {
@@ -215,6 +225,58 @@ export function Gerador() {
                 placeholder="07,13,21"
                 className={fieldClass}
               />
+            </label>
+          )}
+
+          {mode === 'trend' && (
+            <label className="block text-sm font-semibold text-slate-800 sm:col-span-2">
+              Janela de sorteios
+              <div className="mt-1.5 flex items-center gap-3">
+                <input
+                  type="range"
+                  min={20}
+                  max={100}
+                  step={10}
+                  value={windowSize}
+                  onChange={(e) => setWindowSize(parseInt(e.target.value))}
+                  className="flex-1"
+                />
+                <span className="min-w-[3rem] text-sm font-bold text-blue-700">{windowSize}</span>
+              </div>
+            </label>
+          )}
+
+          {mode === 'monte-carlo' && (
+            <label className="block text-sm font-semibold text-slate-800 sm:col-span-2">
+              Iterações
+              <div className="mt-1.5 flex items-center gap-3">
+                <input
+                  type="range"
+                  min={1000}
+                  max={100000}
+                  step={1000}
+                  value={iterations}
+                  onChange={(e) => setIterations(parseInt(e.target.value))}
+                  className="flex-1"
+                />
+                <span className="min-w-[5rem] text-sm font-bold text-blue-700">{iterations.toLocaleString()}</span>
+              </div>
+            </label>
+          )}
+
+          {mode === 'ensemble' && (
+            <label className="block text-sm font-semibold text-slate-800 sm:col-span-2">
+              Estratégias
+              <input
+                type="text"
+                value={strategies}
+                onChange={(e) => setStrategies(e.target.value)}
+                placeholder="top6,cold6,balanced-3p3i"
+                className={fieldClass}
+              />
+              <p className="mt-1 text-xs text-slate-400">
+                IDs separados por vírgula. Opções: top6, cold6, balanced-3p3i, quadrants, full-cycle, sum-target, primes-power, avg-frequency
+              </p>
             </label>
           )}
         </div>
