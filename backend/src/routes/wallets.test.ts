@@ -131,6 +131,43 @@ describe('wallet routes', () => {
     await expect(duplicate.json()).resolves.toEqual({ error: 'Este jogo já existe na carteira' });
   });
 
+  it('rejects creating a wallet with a duplicate name', async () => {
+    const duplicate = await request('/api/wallets', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: seedWallet.name })
+    });
+    expect(duplicate.status).toBe(400);
+    await expect(duplicate.json()).resolves.toEqual({ error: 'Já existe uma carteira com esse nome' });
+  });
+
+  it('imports multiple games in batch, reporting added and skipped counts', async () => {
+    await request(`/api/wallets/${seedWallet.id}/games`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dezenas: ['01', '02', '03', '04', '05', '06'] })
+    });
+
+    const imported = await request(`/api/wallets/${seedWallet.id}/games/batch`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jogos: [
+          ['01', '02', '03', '04', '05', '06'],
+          ['10', '20', '30', '40', '50', '60'],
+          ['07', '08', '09', '10', '11', '12'],
+          ['13', '14', '15', '16', '17', '18'],
+        ]
+      })
+    });
+    expect(imported.status).toBe(201);
+    await expect(imported.json()).resolves.toEqual({ added: 3, skipped: 1 });
+
+    const detail = await request(`/api/wallets/${seedWallet.id}`);
+    const body = await detail.json() as { games: Array<{ dezenas: string[] }> };
+    expect(body.games).toHaveLength(4);
+  });
+
   it('updates a wallet or rejects missing wallets and invalid statuses', async () => {
     const updated = await request(`/api/wallets/${seedWallet.id}`, {
       method: 'PATCH',

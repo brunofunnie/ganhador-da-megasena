@@ -280,6 +280,17 @@ export function addGameToWallet(id: number, dezenas: string[]): Promise<WalletGa
   });
 }
 
+export function importGamesToWallet(id: number, jogos: string[][]): Promise<{ added: number; skipped: number }> {
+  return fetch(`${BASE}/wallets/${id}/games/batch`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ jogos }),
+  }).then(async (res) => {
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Erro ao importar jogos');
+    return res.json();
+  });
+}
+
 export function deleteWalletGame(id: number, gameId: number): Promise<void> {
   return fetch(`${BASE}/wallets/${id}/games/${gameId}`, { method: 'DELETE' }).then(async (res) => {
     if (res.status === 204) return;

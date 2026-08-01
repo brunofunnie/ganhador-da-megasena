@@ -174,7 +174,7 @@ export function Gerador() {
       await queryClient.invalidateQueries({ queryKey: ['wallets'] });
     } catch (err) {
       console.error(err);
-      setSaveError('Não foi possível criar a carteira e salvar o jogo. Tente novamente.');
+      setSaveError(err instanceof Error ? err.message : 'Não foi possível criar a carteira e salvar o jogo. Tente novamente.');
     } finally {
       setSaving(false);
     }

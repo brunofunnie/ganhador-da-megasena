@@ -4,6 +4,7 @@ import path from 'path';
 import { closeDb, getDb, initDb } from './db';
 import {
   addGame,
+  addGames,
   createWallet,
   dedupeAllWallets,
   dedupeWalletGames,
@@ -173,5 +174,38 @@ describe('wallet domain services', () => {
     expect(removed).toBe(2);
     expect(getWallet(walletA.id)?.games).toHaveLength(1);
     expect(getWallet(walletB.id)?.games).toHaveLength(1);
+  });
+
+  it('rejects creating a wallet with a duplicate name (case-insensitive)', () => {
+    createWallet('Mega da Virada');
+    expect(() => createWallet('mega da virada')).toThrow(/já existe/i);
+    expect(listWallets()).toHaveLength(1);
+  });
+
+  it('rejects renaming a wallet to an existing name', () => {
+    createWallet('A');
+    const walletB = createWallet('B');
+    expect(() => updateWallet(walletB.id, { name: 'a' })).toThrow(/já existe/i);
+    expect(getWallet(walletB.id)?.name).toBe('B');
+  });
+
+  it('allows renaming a wallet to its own name', () => {
+    const wallet = createWallet('Nome');
+    expect(() => updateWallet(wallet.id, { name: 'nome' })).not.toThrow();
+    expect(getWallet(wallet.id)?.name).toBe('nome');
+  });
+
+  it('adds multiple games at once skipping duplicates and invalid lines', () => {
+    const wallet = createWallet('Carteira');
+    addGame(wallet.id, ['01', '02', '03', '04', '05', '06']);
+
+    const result = addGames(wallet.id, [
+      ['01', '02', '03', '04', '05', '06'],
+      ['10', '20', '30', '40', '50', '60'],
+      ['07', '08', '09', '10', '11', '12'],
+    ]);
+
+    expect(result).toEqual({ added: 2, skipped: 1 });
+    expect(getWallet(wallet.id)?.games).toHaveLength(3);
   });
 });

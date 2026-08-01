@@ -99,10 +99,19 @@ export function getWallet(id: number): WalletDetail | null {
   };
 }
 
+function walletNameExists(name: string, excludeId?: number): boolean {
+  const db = getDb();
+  const row = db.prepare(
+    'SELECT id FROM wallets WHERE lower(name) = lower(?)'
+  ).get(name) as { id: number } | undefined;
+  return row !== undefined && row.id !== excludeId;
+}
+
 export function createWallet(name: string): WalletSummary {
   const db = getDb();
   const trimmed = name.trim();
   if (!trimmed) throw new Error('Nome é obrigatório');
+  if (walletNameExists(trimmed)) throw new Error('Já existe uma carteira com esse nome');
   const createdAt = new Date().toISOString();
   const result = db.prepare('INSERT INTO wallets (name, created_at) VALUES (?, ?)').run(trimmed, createdAt);
   return {
@@ -127,6 +136,7 @@ export function updateWallet(
   const status = patch.status ?? existing.status;
   if (!name) throw new Error('Nome é obrigatório');
   if (status !== 'open' && status !== 'finalized') throw new Error('Status inválido');
+  if (name !== existing.name && walletNameExists(name, id)) throw new Error('Já existe uma carteira com esse nome');
 
   const finalizedAt = status === 'finalized' ? new Date().toISOString() : null;
   db.prepare(
@@ -167,6 +177,48 @@ export function addGame(walletId: number, dezenas: string[]): WalletGame {
     dezenas: normalized,
     createdAt
   };
+}
+
+export function addGames(
+  walletId: number,
+  games: string[][]
+): { added: number; skipped: number } {
+  const db = getDb();
+  const wallet = getWallet(walletId);
+  if (!wallet) throw new Error('Carteira não encontrada');
+
+  const insert = db.prepare(
+    'INSERT INTO wallet_games (wallet_id, dezenas, created_at) VALUES (?, ?, ?)'
+  );
+  const exists = db.prepare(
+    'SELECT id FROM wallet_games WHERE wallet_id = ? AND dezenas = ?'
+  );
+
+  let added = 0;
+  let skipped = 0;
+  const createdAt = new Date().toISOString();
+
+  const transaction = db.transaction(() => {
+    for (const game of games) {
+      let normalized: string[];
+      try {
+        normalized = normalizeDezenas(game);
+      } catch {
+        skipped++;
+        continue;
+      }
+      const normalizedJson = JSON.stringify(normalized);
+      if (exists.get(walletId, normalizedJson)) {
+        skipped++;
+        continue;
+      }
+      insert.run(walletId, normalizedJson, createdAt);
+      added++;
+    }
+  });
+  transaction();
+
+  return { added, skipped };
 }
 
 export function dedupeWalletGames(walletId: number): number {

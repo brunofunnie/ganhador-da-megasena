@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import {
   addGame,
+  addGames,
   createWallet,
   deleteWallet,
   getWallet,
@@ -35,6 +36,11 @@ router.post('/wallets', (req: Request, res: Response) => {
     }
     res.status(201).json(createWallet(name));
   } catch (err) {
+    const message = err instanceof Error ? err.message : '';
+    if (message === 'Já existe uma carteira com esse nome') {
+      res.status(400).json({ error: message });
+      return;
+    }
     res.status(500).json({ error: 'Falha ao criar carteira' });
   }
 });
@@ -74,7 +80,7 @@ router.patch('/wallets/:id', (req: Request, res: Response) => {
       res.status(404).json({ error: message });
       return;
     }
-    if (message === 'Nome é obrigatório' || message === 'Status inválido') {
+    if (message === 'Nome é obrigatório' || message === 'Status inválido' || message === 'Já existe uma carteira com esse nome') {
       res.status(400).json({ error: message });
       return;
     }
@@ -130,6 +136,30 @@ router.post('/wallets/:id/games', (req: Request, res: Response) => {
       return;
     }
     res.status(500).json({ error: 'Falha ao adicionar jogo' });
+  }
+});
+
+router.post('/wallets/:id/games/batch', (req: Request, res: Response) => {
+  const id = parseId(req.params.id);
+  if (id === null) {
+    res.status(400).json({ error: 'ID de carteira inválido' });
+    return;
+  }
+  try {
+    const games = Array.isArray(req.body?.jogos) ? (req.body.jogos as string[][]) : [];
+    if (games.length === 0) {
+      res.status(400).json({ error: 'Nenhum jogo para importar' });
+      return;
+    }
+    const result = addGames(id, games);
+    res.status(201).json(result);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : '';
+    if (message === 'Carteira não encontrada') {
+      res.status(404).json({ error: message });
+      return;
+    }
+    res.status(500).json({ error: 'Falha ao importar jogos' });
   }
 });
 

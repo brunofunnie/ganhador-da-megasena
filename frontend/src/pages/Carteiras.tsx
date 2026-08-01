@@ -1,11 +1,12 @@
 import { useCallback, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Check, CheckCircle2, Copy, LayoutGrid, List, Pencil, Trash2, Wallet, Plus, Lock, Unlock } from 'lucide-react';
+import { Check, CheckCircle2, Copy, LayoutGrid, List, Pencil, Trash2, Wallet, Plus, Lock, Unlock, Upload } from 'lucide-react';
 import {
   createWallet,
   deleteWallet,
   deleteWalletGame,
   fetchWallet,
+  importGamesToWallet,
   updateWallet,
   type WalletGame,
   type WalletSummary,
@@ -76,6 +77,85 @@ function CopyGamesButton({ games, label = 'Copiar jogos', disabled = false }: { 
       {copied ? <Check size={13} aria-hidden="true" /> : <Copy size={13} aria-hidden="true" />}
       {copied ? 'Copiado!' : label}
     </button>
+  );
+}
+
+function parseImportedGames(text: string): string[][] {
+  return text
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => line.split(',').map((n) => n.trim()).filter(Boolean));
+}
+
+function ImportGamesModal({ walletId, onClose, onImported }: { walletId: number; onClose: () => void; onImported: () => void }) {
+  const queryClient = useQueryClient();
+  const [text, setText] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [importing, setImporting] = useState(false);
+
+  const games = parseImportedGames(text);
+  const validCount = games.filter((g) => g.length === 6).length;
+
+  const handleImport = async () => {
+    if (games.length === 0) return;
+    setImporting(true);
+    setError(null);
+    try {
+      const result = await importGamesToWallet(walletId, games);
+      queryClient.invalidateQueries({ queryKey: ['wallets', walletId] });
+      queryClient.invalidateQueries({ queryKey: ['wallets'] });
+      onImported();
+      onClose();
+      alert(`Importados ${result.added} jogo(s).${result.skipped > 0 ? ` ${result.skipped} ignorado(s).` : ''}`);
+    } catch (err) {
+      setError(messageFrom(err));
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
+      <div className="w-full max-w-lg rounded-2xl bg-white p-5 shadow-xl">
+        <h3 className="text-lg font-bold text-slate-900">Importar jogos</h3>
+        <p className="mt-1 text-sm text-slate-500">
+          Cole um jogo por linha, com os 6 números separados por vírgula. Jogos inválidos ou duplicados serão ignorados.
+        </p>
+        <textarea
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          rows={8}
+          placeholder={'01,02,03,04,05,06\n07,08,09,10,11,12\n13,14,15,16,17,18'}
+          className="mt-4 w-full resize-y rounded-lg border border-slate-300 bg-white px-3 py-2 font-mono text-sm leading-6 outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20"
+        />
+        {error && (
+          <p role="alert" className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{error}</p>
+        )}
+        <p className="mt-2 text-xs text-slate-500">
+          {games.length === 0 ? 'Nenhuma linha informada' : `${validCount} de ${games.length} jogos válidos`}
+        </p>
+        <div className="mt-4 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={importing}
+            className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-bold text-slate-600 transition hover:bg-slate-50 disabled:opacity-50"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            onClick={handleImport}
+            disabled={importing || validCount === 0}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-blue-700 px-4 py-2 text-sm font-bold text-white transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:bg-slate-400"
+          >
+            <Upload size={15} aria-hidden="true" />
+            {importing ? 'Importando...' : 'Importar'}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -290,6 +370,7 @@ function WalletDetailView({ id, onBack, onRemoved }: { id: number; onBack: () =>
   const [confirmRemoveGame, setConfirmRemoveGame] = useState<WalletGame | null>(null);
   const [viewMode, setViewMode] = useState<'table' | 'cards'>('table');
   const [checkDraw, setCheckDraw] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
 
   const drawnNumbers = status?.latestDraw?.dezenas ?? [];
 
@@ -370,6 +451,14 @@ function WalletDetailView({ id, onBack, onRemoved }: { id: number; onBack: () =>
           <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
             <div className="flex flex-wrap items-center gap-2">
               <CopyGamesButton games={wallet.games} label="Copiar jogos" />
+              <button
+                type="button"
+                onClick={() => setImportOpen(true)}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-bold text-slate-600 transition hover:border-blue-300 hover:bg-blue-50"
+              >
+                <Upload size={13} aria-hidden="true" />
+                Importar jogos
+              </button>
               <button
                 type="button"
                 onClick={() => setCheckDraw((value) => !value)}
@@ -510,6 +599,14 @@ function WalletDetailView({ id, onBack, onRemoved }: { id: number; onBack: () =>
             </div>
           </div>
         </div>
+      )}
+
+      {importOpen && (
+        <ImportGamesModal
+          walletId={id}
+          onClose={() => setImportOpen(false)}
+          onImported={onRemoved}
+        />
       )}
     </section>
   );
