@@ -1,16 +1,19 @@
 import { useState } from 'react';
-import { Check, Copy, FlaskConical } from 'lucide-react';
+import { Check, Copy, FlaskConical, Trash2 } from 'lucide-react';
 import { NumberBall } from './NumberBall';
 
 interface GameCardProps {
   numbers: string[];
   index?: number;
   onSimulate?: (numbers: string[]) => void;
+  onRemove?: (numbers: string[]) => void;
+  drawnNumbers?: string[];
   ballSize?: 'sm' | 'md';
 }
 
-export function GameCard({ numbers, index, onSimulate, ballSize = 'md' }: GameCardProps) {
+export function GameCard({ numbers, index, onSimulate, onRemove, drawnNumbers, ballSize = 'md' }: GameCardProps) {
   const [copied, setCopied] = useState(false);
+  const drawnSet = drawnNumbers ? new Set(drawnNumbers) : null;
 
   const handleCopy = async () => {
     await navigator.clipboard.writeText(numbers.join(','));
@@ -47,6 +50,18 @@ export function GameCard({ numbers, index, onSimulate, ballSize = 'md' }: GameCa
             {copied ? <Check size={15} aria-hidden="true" /> : <Copy size={15} aria-hidden="true" />}
             {copied ? 'Copiado!' : 'Copiar'}
           </button>
+          {onRemove && (
+            <button
+              type="button"
+              onClick={() => onRemove(numbers)}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 px-2.5 py-2 text-xs font-bold text-red-700 transition hover:bg-red-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-300"
+              aria-label={`Remover jogo ${index !== undefined ? index + 1 : ''}`.trim()}
+              title="Remover jogo"
+            >
+              <Trash2 size={14} aria-hidden="true" />
+              Excluir
+            </button>
+          )}
         </div>
       </div>
       <div
@@ -54,7 +69,7 @@ export function GameCard({ numbers, index, onSimulate, ballSize = 'md' }: GameCa
         aria-label={index === undefined ? 'Dezenas do jogo' : `Dezenas do jogo ${index + 1}`}
       >
         {numbers.map((n) => (
-          <NumberBall key={n} number={n} size={ballSize} />
+          <NumberBall key={n} number={n} size={ballSize} variant={drawnSet?.has(n) ? 'accent' : 'default'} />
         ))}
       </div>
     </div>

@@ -5,6 +5,8 @@ import { closeDb, getDb, initDb } from './db';
 import {
   addGame,
   createWallet,
+  dedupeAllWallets,
+  dedupeWalletGames,
   deleteWallet,
   getWallet,
   listWallets,
@@ -115,5 +117,61 @@ describe('wallet domain services', () => {
   it('throws when adding to or removing from a nonexistent wallet', () => {
     expect(() => addGame(999, ['01', '02', '03', '04', '05', '06'])).toThrow(/não encontrada/);
     expect(() => removeGame(999, 1)).toThrow(/não encontrada/);
+  });
+
+  it('rejects a duplicate game within the same wallet', () => {
+    const wallet = createWallet('Carteira');
+    addGame(wallet.id, ['01', '02', '03', '04', '05', '06']);
+    expect(() => addGame(wallet.id, ['01', '02', '03', '04', '05', '06'])).toThrow(/já existe/i);
+    expect(getWallet(wallet.id)?.games).toHaveLength(1);
+  });
+
+  it('allows the same game in different wallets', () => {
+    const walletA = createWallet('A');
+    const walletB = createWallet('B');
+    addGame(walletA.id, ['01', '02', '03', '04', '05', '06']);
+    expect(() => addGame(walletB.id, ['01', '02', '03', '04', '05', '06'])).not.toThrow();
+    expect(getWallet(walletA.id)?.games).toHaveLength(1);
+    expect(getWallet(walletB.id)?.games).toHaveLength(1);
+  });
+
+  it('dedupes existing games in a wallet keeping the first occurrence', () => {
+    const wallet = createWallet('Carteira');
+    const insert = getDb().prepare('INSERT INTO wallet_games (wallet_id, dezenas, created_at) VALUES (?, ?, ?)');
+    insert.run(wallet.id, JSON.stringify(['01', '02', '03', '04', '05', '06']), '2024-01-01T00:00:00.000Z');
+    insert.run(wallet.id, JSON.stringify(['01', '02', '03', '04', '05', '06']), '2024-01-02T00:00:00.000Z');
+    insert.run(wallet.id, JSON.stringify(['10', '20', '30', '40', '50', '60']), '2024-01-03T00:00:00.000Z');
+
+    const removed = dedupeWalletGames(wallet.id);
+    expect(removed).toBe(1);
+
+    const games = getWallet(wallet.id)?.games ?? [];
+    expect(games).toHaveLength(2);
+    expect(games[0].dezenas).toEqual(['01', '02', '03', '04', '05', '06']);
+    expect(games[1].dezenas).toEqual(['10', '20', '30', '40', '50', '60']);
+  });
+
+  it('returns zero from dedupe when there are no duplicates', () => {
+    const wallet = createWallet('Carteira');
+    addGame(wallet.id, ['01', '02', '03', '04', '05', '06']);
+    addGame(wallet.id, ['10', '20', '30', '40', '50', '60']);
+
+    expect(dedupeWalletGames(wallet.id)).toBe(0);
+    expect(getWallet(wallet.id)?.games).toHaveLength(2);
+  });
+
+  it('dedupes all wallets at once', () => {
+    const walletA = createWallet('A');
+    const walletB = createWallet('B');
+    const insert = getDb().prepare('INSERT INTO wallet_games (wallet_id, dezenas, created_at) VALUES (?, ?, ?)');
+    insert.run(walletA.id, JSON.stringify(['01', '02', '03', '04', '05', '06']), '2024-01-01T00:00:00.000Z');
+    insert.run(walletA.id, JSON.stringify(['01', '02', '03', '04', '05', '06']), '2024-01-02T00:00:00.000Z');
+    insert.run(walletB.id, JSON.stringify(['10', '20', '30', '40', '50', '60']), '2024-01-01T00:00:00.000Z');
+    insert.run(walletB.id, JSON.stringify(['10', '20', '30', '40', '50', '60']), '2024-01-02T00:00:00.000Z');
+
+    const removed = dedupeAllWallets();
+    expect(removed).toBe(2);
+    expect(getWallet(walletA.id)?.games).toHaveLength(1);
+    expect(getWallet(walletB.id)?.games).toHaveLength(1);
   });
 });

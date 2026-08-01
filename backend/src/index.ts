@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import { initDb } from './db';
 import { syncResults } from './sync';
+import { dedupeAllWallets } from './wallets';
 import statusRoutes from './routes/status';
 import statisticsRoutes from './routes/statistics';
 import generateRoutes from './routes/generate';
@@ -25,6 +26,11 @@ app.use('/api', walletsRoutes);
 async function start() {
   initDb();
   console.log('Database initialized');
+
+  const removedDuplicates = dedupeAllWallets();
+  if (removedDuplicates > 0) {
+    console.log(`Removed ${removedDuplicates} duplicate game(s) from wallets`);
+  }
 
   try {
     const status = await syncResults();

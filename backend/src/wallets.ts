@@ -150,16 +150,63 @@ export function addGame(walletId: number, dezenas: string[]): WalletGame {
   if (!wallet) throw new Error('Carteira não encontrada');
 
   const normalized = normalizeDezenas(dezenas);
+  const normalizedJson = JSON.stringify(normalized);
+
+  const existing = db.prepare(
+    'SELECT id FROM wallet_games WHERE wallet_id = ? AND dezenas = ?'
+  ).get(walletId, normalizedJson);
+  if (existing) throw new Error('Este jogo já existe na carteira');
+
   const createdAt = new Date().toISOString();
   const result = db.prepare(
     'INSERT INTO wallet_games (wallet_id, dezenas, created_at) VALUES (?, ?, ?)'
-  ).run(walletId, JSON.stringify(normalized), createdAt);
+  ).run(walletId, normalizedJson, createdAt);
 
   return {
     id: Number(result.lastInsertRowid),
     dezenas: normalized,
     createdAt
   };
+}
+
+export function dedupeWalletGames(walletId: number): number {
+  const db = getDb();
+  const wallet = getWallet(walletId);
+  if (!wallet) throw new Error('Carteira não encontrada');
+
+  const rows = db.prepare(
+    'SELECT id, dezenas FROM wallet_games WHERE wallet_id = ? ORDER BY created_at ASC'
+  ).all(walletId) as Array<{ id: number; dezenas: string }>;
+
+  const seen = new Set<string>();
+  const toDelete: number[] = [];
+  for (const row of rows) {
+    if (seen.has(row.dezenas)) {
+      toDelete.push(row.id);
+    } else {
+      seen.add(row.dezenas);
+    }
+  }
+
+  if (toDelete.length === 0) return 0;
+
+  const remove = db.prepare('DELETE FROM wallet_games WHERE id = ?');
+  const transaction = db.transaction(() => {
+    for (const id of toDelete) remove.run(id);
+  });
+  transaction();
+
+  return toDelete.length;
+}
+
+export function dedupeAllWallets(): number {
+  const db = getDb();
+  const rows = db.prepare('SELECT id FROM wallets').all() as Array<{ id: number }>;
+  let removed = 0;
+  for (const row of rows) {
+    removed += dedupeWalletGames(row.id);
+  }
+  return removed;
 }
 
 export function removeGame(walletId: number, gameId: number): void {

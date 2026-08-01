@@ -115,6 +115,22 @@ describe('wallet routes', () => {
     await expect(missing.json()).resolves.toEqual({ error: 'Carteira não encontrada' });
   });
 
+  it('rejects a duplicate game within the same wallet', async () => {
+    await request(`/api/wallets/${seedWallet.id}/games`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dezenas: ['01', '02', '03', '04', '05', '06'] })
+    });
+
+    const duplicate = await request(`/api/wallets/${seedWallet.id}/games`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dezenas: ['01', '02', '03', '04', '05', '06'] })
+    });
+    expect(duplicate.status).toBe(400);
+    await expect(duplicate.json()).resolves.toEqual({ error: 'Este jogo já existe na carteira' });
+  });
+
   it('updates a wallet or rejects missing wallets and invalid statuses', async () => {
     const updated = await request(`/api/wallets/${seedWallet.id}`, {
       method: 'PATCH',

@@ -10,6 +10,7 @@ export interface LatestDraw {
   concurso: number;
   data: string;
   dezenas: string[];
+  proximoConcurso: number | null;
 }
 
 export interface StatusResponse {
@@ -127,12 +128,27 @@ export interface DrawListResponse {
 }
 
 
+export interface NumberGapIntervals {
+  numero: string;
+  intervalos: number[];
+  gapAtual: number;
+}
+
+export interface GapIntervalsResponse {
+  totalConcursos: number;
+  numeros: NumberGapIntervals[];
+}
+
 export function fetchStatus(): Promise<StatusResponse> {
   return apiFetch('/status');
 }
 
 export function fetchStatistics(): Promise<StatisticsResponse> {
   return apiFetch('/statistics');
+}
+
+export function fetchStatisticsIntervals(windowSize: number): Promise<GapIntervalsResponse> {
+  return apiFetch(`/statistics/intervals?window=${windowSize}`);
 }
 
 export function fetchGenerate(params: {

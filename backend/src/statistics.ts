@@ -21,6 +21,65 @@ export interface Statistics {
   };
 }
 
+export interface NumberGapIntervals {
+  numero: string;
+  intervalos: number[];
+  gapAtual: number;
+}
+
+export interface GapIntervals {
+  totalConcursos: number;
+  numeros: NumberGapIntervals[];
+}
+
+export function computeGapIntervals(windowSize: number): GapIntervals {
+  const db = getDb();
+  const draws = db.prepare('SELECT concurso, dezenas FROM draws ORDER BY concurso DESC').all() as {
+    concurso: number;
+    dezenas: string;
+  }[];
+
+  const windowed = draws.slice(0, Math.max(1, Math.min(windowSize, draws.length)));
+  const latestConcurso = draws.length > 0 ? draws[0].concurso : 0;
+
+  // Last concurso where each number appeared, across ALL history (for gapAtual)
+  const allLastSeen = new Map<string, number>();
+
+  const numeros: NumberGapIntervals[] = [];
+  for (let i = 1; i <= 60; i++) {
+    const key = i.toString().padStart(2, '0');
+    const intervalos: number[] = [];
+    let lastSeen: number | null = null;
+
+    for (const draw of windowed) {
+      const dezenas: string[] = JSON.parse(draw.dezenas);
+      if (dezenas.includes(key)) {
+        if (lastSeen !== null) {
+          intervalos.push(lastSeen - draw.concurso);
+        }
+        lastSeen = draw.concurso;
+      }
+    }
+
+    if (!allLastSeen.has(key)) {
+      for (const draw of draws) {
+        const dezenas: string[] = JSON.parse(draw.dezenas);
+        if (dezenas.includes(key)) {
+          allLastSeen.set(key, draw.concurso);
+          break;
+        }
+      }
+    }
+
+    const lastAppearance = allLastSeen.get(key);
+    const gapAtual = lastAppearance === undefined ? (latestConcurso > 0 ? draws.length : 0) : latestConcurso - lastAppearance;
+
+    numeros.push({ numero: key, intervalos, gapAtual });
+  }
+
+  return { totalConcursos: windowed.length, numeros };
+}
+
 export function computeStatistics(): Statistics {
   const db = getDb();
   const draws = db.prepare('SELECT concurso, dezenas FROM draws ORDER BY concurso ASC').all() as {

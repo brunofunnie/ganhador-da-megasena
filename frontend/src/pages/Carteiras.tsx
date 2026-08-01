@@ -1,23 +1,88 @@
 import { useCallback, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Pencil, Trash2, Wallet, Plus, Lock, Unlock } from 'lucide-react';
+import { Check, CheckCircle2, Copy, LayoutGrid, List, Pencil, Trash2, Wallet, Plus, Lock, Unlock } from 'lucide-react';
 import {
   createWallet,
   deleteWallet,
   deleteWalletGame,
+  fetchWallet,
   updateWallet,
+  type WalletGame,
   type WalletSummary,
 } from '../lib/api';
 import { useWallet, useWallets } from '../hooks/useWallets';
+import { useStatus } from '../hooks/useStatus';
+import { nextDrawName } from '../lib/utils';
 import { GameCard } from '../components/GameCard';
 
 function messageFrom(err: unknown): string {
   return err instanceof Error ? err.message : 'Ocorreu um erro inesperado. Tente novamente.';
 }
 
+function copyGamesText(games: Array<{ dezenas: string[] }>): string {
+  return games.map((game) => game.dezenas.join(',')).join('\n');
+}
+
+function CopyWalletButton({ walletId, disabled = false }: { walletId: number; disabled?: boolean }) {
+  const [copied, setCopied] = useState(false);
+  const [copying, setCopying] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleCopy = async () => {
+    setCopying(true);
+    setError(null);
+    try {
+      const wallet = await fetchWallet(walletId);
+      await navigator.clipboard.writeText(copyGamesText(wallet.games));
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch (err) {
+      setError(messageFrom(err));
+    } finally {
+      setCopying(false);
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={handleCopy}
+      disabled={disabled || copying}
+      className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2 py-1 text-xs font-bold text-slate-600 transition hover:border-blue-300 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
+      title={error ?? 'Copiar todos os jogos da carteira'}
+    >
+      {copied ? <Check size={12} aria-hidden="true" /> : <Copy size={12} aria-hidden="true" />}
+      {copied ? 'Copiado!' : copying ? 'Copiando...' : 'Copiar jogos'}
+    </button>
+  );
+}
+
+function CopyGamesButton({ games, label = 'Copiar jogos', disabled = false }: { games: Array<{ dezenas: string[] }>; label?: string; disabled?: boolean }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    await navigator.clipboard.writeText(copyGamesText(games));
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={handleCopy}
+      disabled={disabled || games.length === 0}
+      className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-bold text-slate-600 transition hover:border-blue-300 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-40"
+    >
+      {copied ? <Check size={13} aria-hidden="true" /> : <Copy size={13} aria-hidden="true" />}
+      {copied ? 'Copiado!' : label}
+    </button>
+  );
+}
+
 export function Carteiras() {
   const queryClient = useQueryClient();
   const { data, isLoading, isError } = useWallets();
+  const { data: status } = useStatus();
   const [createOpen, setCreateOpen] = useState(false);
   const [createName, setCreateName] = useState('');
   const [selectedId, setSelectedId] = useState<number | null>(null);
@@ -80,7 +145,10 @@ export function Carteiras() {
         </div>
         <button
           type="button"
-          onClick={() => setCreateOpen(true)}
+          onClick={() => {
+            setCreateName(nextDrawName(status?.latestDraw?.proximoConcurso ?? null) ?? '');
+            setCreateOpen(true);
+          }}
           disabled={anyPending}
           className="inline-flex items-center gap-2 rounded-xl bg-blue-700 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:bg-slate-400"
         >
@@ -156,6 +224,7 @@ export function Carteiras() {
                 {wallet.gameCount} jogo{wallet.gameCount === 1 ? '' : 's'}
               </p>
               <div className="mt-3 flex flex-wrap gap-2 border-t border-slate-100 pt-3">
+                <CopyWalletButton walletId={wallet.id} disabled={anyPending} />
                 <button
                   type="button"
                   onClick={() => toggleMutation.mutate(wallet)}
@@ -214,9 +283,15 @@ export function Carteiras() {
 function WalletDetailView({ id, onBack, onRemoved }: { id: number; onBack: () => void; onRemoved: () => void }) {
   const queryClient = useQueryClient();
   const { data: wallet, isLoading } = useWallet(id);
+  const { data: status } = useStatus();
   const [editing, setEditing] = useState(false);
   const [nameDraft, setNameDraft] = useState('');
   const [detailError, setDetailError] = useState<string | null>(null);
+  const [confirmRemoveGame, setConfirmRemoveGame] = useState<WalletGame | null>(null);
+  const [viewMode, setViewMode] = useState<'table' | 'cards'>('table');
+  const [checkDraw, setCheckDraw] = useState(false);
+
+  const drawnNumbers = status?.latestDraw?.dezenas ?? [];
 
   const renameMutation = useMutation({
     mutationFn: (name: string) => updateWallet(id, { name }),
@@ -232,6 +307,7 @@ function WalletDetailView({ id, onBack, onRemoved }: { id: number; onBack: () =>
   const removeGameMutation = useMutation({
     mutationFn: (gameId: number) => deleteWalletGame(id, gameId),
     onSuccess: () => {
+      setConfirmRemoveGame(null);
       setDetailError(null);
       queryClient.invalidateQueries({ queryKey: ['wallets', id] });
       onRemoved();
@@ -290,22 +366,149 @@ function WalletDetailView({ id, onBack, onRemoved }: { id: number; onBack: () =>
           Esta carteira ainda não tem jogos.
         </p>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2">
-          {wallet.games.map((game, index) => (
-            <div key={game.id} className="relative">
-              <GameCard numbers={game.dezenas} index={index} ballSize="sm" />
+        <div>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <CopyGamesButton games={wallet.games} label="Copiar jogos" />
               <button
                 type="button"
-                onClick={() => removeGameMutation.mutate(game.id)}
-                disabled={removeGameMutation.isPending}
-                className="absolute right-3 top-3 inline-flex size-7 items-center justify-center rounded-md text-slate-400 transition hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-50"
-                aria-label="Remover jogo"
-                title="Remover jogo"
+                onClick={() => setCheckDraw((value) => !value)}
+                disabled={drawnNumbers.length === 0}
+                className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-40 ${
+                  checkDraw
+                    ? 'border-yellow-300 bg-yellow-400 text-blue-950'
+                    : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                }`}
+                aria-pressed={checkDraw}
+                title={drawnNumbers.length ? `Checar com o concurso ${status?.latestDraw?.concurso}` : 'Sem sorteio disponível para checagem'}
               >
-                <Trash2 size={14} aria-hidden="true" />
+                {checkDraw && <CheckCircle2 size={13} aria-hidden="true" />}
+                Checar com o sorteio atual
               </button>
             </div>
-          ))}
+            <div className="flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-100 p-0.5">
+              <button
+                type="button"
+                onClick={() => setViewMode('table')}
+                className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-bold transition ${
+                  viewMode === 'table' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                }`}
+                aria-pressed={viewMode === 'table'}
+              >
+                <List size={13} aria-hidden="true" />
+                Tabela
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode('cards')}
+                className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-bold transition ${
+                  viewMode === 'cards' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                }`}
+                aria-pressed={viewMode === 'cards'}
+              >
+                <LayoutGrid size={13} aria-hidden="true" />
+                Cards
+              </button>
+            </div>
+          </div>
+
+          {viewMode === 'table' ? (
+            <div className="overflow-x-auto rounded-xl border border-slate-200">
+              <table className="min-w-[560px] w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs font-bold uppercase tracking-wide text-slate-500">
+                    <th scope="col" className="px-3 py-2">#</th>
+                    <th scope="col" className="px-3 py-2">Jogo</th>
+                    {checkDraw && <th scope="col" className="px-3 py-2 text-center">Acertos</th>}
+                    <th scope="col" className="px-3 py-2 text-right">Ações</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {wallet.games.map((game, index) => {
+                    const hits = checkDraw ? game.dezenas.filter((n) => drawnNumbers.includes(n)).length : 0;
+                    return (
+                      <tr key={game.id} className="hover:bg-slate-50">
+                        <td className="px-3 py-2 font-mono text-xs text-slate-400">{index + 1}</td>
+                        <td className="px-3 py-2">
+                          <div className="flex flex-wrap gap-1">
+                            {game.dezenas.map((n) => (
+                              <span
+                                key={n}
+                                className={`inline-flex size-7 items-center justify-center rounded-full border text-xs font-bold tabular-nums ${
+                                  checkDraw && drawnNumbers.includes(n)
+                                    ? 'border-yellow-300 bg-yellow-400 text-blue-950'
+                                    : 'border-slate-200 bg-white text-slate-700'
+                                }`}
+                              >
+                                {n}
+                              </span>
+                            ))}
+                          </div>
+                        </td>
+                        {checkDraw && (
+                          <td className="px-3 py-2 text-center font-mono font-bold text-blue-700">{hits}</td>
+                        )}
+                        <td className="px-3 py-2">
+                          <div className="flex justify-end">
+                            <button
+                              type="button"
+                              onClick={() => setConfirmRemoveGame(game)}
+                              className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-bold text-slate-400 transition hover:bg-red-50 hover:text-red-600"
+                              aria-label={`Remover jogo ${index + 1}`}
+                              title="Remover jogo"
+                            >
+                              <Trash2 size={13} aria-hidden="true" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-2">
+              {wallet.games.map((game, index) => (
+                <GameCard
+                  key={game.id}
+                  numbers={game.dezenas}
+                  index={index}
+                  ballSize="sm"
+                  drawnNumbers={checkDraw ? drawnNumbers : undefined}
+                  onRemove={() => setConfirmRemoveGame(game)}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {confirmRemoveGame && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl">
+            <h3 className="text-lg font-bold text-slate-900">Remover jogo</h3>
+            <p className="mt-1 text-sm text-slate-500">
+              Remover o jogo <strong>{confirmRemoveGame.dezenas.join(',')}</strong> da carteira <strong>{wallet.name}</strong>? Essa ação não pode ser desfeita.
+            </p>
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setConfirmRemoveGame(null)}
+                className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-bold text-slate-600 transition hover:bg-slate-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => removeGameMutation.mutate(confirmRemoveGame.id)}
+                disabled={removeGameMutation.isPending}
+                className="rounded-lg bg-red-700 px-4 py-2 text-sm font-bold text-white transition hover:bg-red-800 disabled:cursor-not-allowed disabled:bg-slate-400"
+              >
+                {removeGameMutation.isPending ? 'Removendo...' : 'Remover'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </section>

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { initDb, getDb, closeDb } from './db';
-import { computeStatistics } from './statistics';
+import { computeGapIntervals, computeStatistics } from './statistics';
 import fs from 'fs';
 import path from 'path';
 
@@ -60,5 +60,37 @@ describe('statistics', () => {
     const { evenOddDistribution } = stats.parity;
     const total = Object.values(evenOddDistribution).reduce((a, b) => a + b, 0);
     expect(total).toBe(3);
+  });
+
+  it('should compute gap intervals per number within the last N draws', () => {
+    const intervals = computeGapIntervals(3);
+
+    expect(intervals.totalConcursos).toBe(3);
+    expect(intervals.numeros).toHaveLength(60);
+
+    // 01 appears in draws 1 and 2 → historical gap of 1; last seen in draw 2, latest is 3 → current gap 1
+    const num01 = intervals.numeros.find(n => n.numero === '01');
+    expect(num01?.intervalos).toEqual([1]);
+    expect(num01?.gapAtual).toBe(1);
+
+    // 10 appears only in draw 3 → no historical gap, current gap 0
+    const num10 = intervals.numeros.find(n => n.numero === '10');
+    expect(num10?.intervalos).toEqual([]);
+    expect(num10?.gapAtual).toBe(0);
+  });
+
+  it('should limit the interval sequence to the last N draws but keep the current gap from all history', () => {
+    // Window of 1: only draw 3 counts for the sequence. 01 is absent from draw 3,
+    // so its sequence is empty, but it last appeared in draw 2 → current gap 1.
+    const intervals = computeGapIntervals(1);
+    expect(intervals.totalConcursos).toBe(1);
+    const num01 = intervals.numeros.find(n => n.numero === '01');
+    expect(num01?.intervalos).toEqual([]);
+    expect(num01?.gapAtual).toBe(1);
+
+    // 10 appears in draw 3 → current gap 0
+    const num10 = intervals.numeros.find(n => n.numero === '10');
+    expect(num10?.intervalos).toEqual([]);
+    expect(num10?.gapAtual).toBe(0);
   });
 });

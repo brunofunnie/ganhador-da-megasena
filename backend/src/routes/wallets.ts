@@ -125,6 +125,10 @@ router.post('/wallets/:id/games', (req: Request, res: Response) => {
       res.status(404).json({ error: message });
       return;
     }
+    if (message === 'Este jogo já existe na carteira') {
+      res.status(400).json({ error: message });
+      return;
+    }
     res.status(500).json({ error: 'Falha ao adicionar jogo' });
   }
 });

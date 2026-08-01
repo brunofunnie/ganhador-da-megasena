@@ -7,6 +7,8 @@ import { NumberPicker } from '../components/NumberPicker';
 import { SimulationDrawer } from '../components/SimulationDrawer';
 import { useQueryClient } from '@tanstack/react-query';
 import { useWallets } from '../hooks/useWallets';
+import { useStatus } from '../hooks/useStatus';
+import { nextDrawName } from '../lib/utils';
 
 const MODES = [
   { value: 'random', label: 'Aleatório Puro' },
@@ -52,6 +54,7 @@ export function Gerador() {
   const [drawerGames, setDrawerGames] = useState<string[][]>([]);
 
   const { data: walletsData } = useWallets();
+  const { data: status } = useStatus();
 
   const handleGenerate = useCallback(async () => {
     setLoading(true);
@@ -129,7 +132,8 @@ export function Gerador() {
     setSaveTarget(numbers);
     setSaveError(null);
     setJustSaved(false);
-  }, []);
+    setNewWalletName(nextDrawName(status?.latestDraw?.proximoConcurso ?? null) ?? '');
+  }, [status]);
 
   const closeAfterSave = useCallback(() => {
     setJustSaved(true);
