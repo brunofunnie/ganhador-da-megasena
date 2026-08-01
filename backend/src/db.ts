@@ -45,6 +45,21 @@ CREATE TABLE IF NOT EXISTS sync_meta (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS wallets (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'open',
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  finalized_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS wallet_games (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  wallet_id INTEGER NOT NULL REFERENCES wallets(id) ON DELETE CASCADE,
+  dezenas TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 `;
 
 const DRAW_METADATA_COLUMNS: Array<[string, string]> = [
