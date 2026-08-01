@@ -48,6 +48,7 @@ export function Carteiras() {
       invalidate();
     },
     onError: (err) => setActionError(messageFrom(err)),
+    onSettled: () => setConfirmDelete(null),
   });
 
   const toggleMutation = useMutation({
@@ -196,13 +197,11 @@ export function Carteiras() {
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  deleteMutation.mutate(confirmDelete.id);
-                  setConfirmDelete(null);
-                }}
-                className="rounded-lg bg-red-700 px-4 py-2 text-sm font-bold text-white transition hover:bg-red-800"
+                onClick={() => deleteMutation.mutate(confirmDelete.id)}
+                disabled={deleteMutation.isPending}
+                className="rounded-lg bg-red-700 px-4 py-2 text-sm font-bold text-white transition hover:bg-red-800 disabled:cursor-not-allowed disabled:bg-slate-400"
               >
-                Excluir
+                {deleteMutation.isPending ? 'Excluindo...' : 'Excluir'}
               </button>
             </div>
           </div>
