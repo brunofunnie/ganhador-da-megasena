@@ -11,12 +11,18 @@ import {
 import { useWallet, useWallets } from '../hooks/useWallets';
 import { GameCard } from '../components/GameCard';
 
+function messageFrom(err: unknown): string {
+  return err instanceof Error ? err.message : 'Ocorreu um erro inesperado. Tente novamente.';
+}
+
 export function Carteiras() {
   const queryClient = useQueryClient();
   const { data, isLoading, isError } = useWallets();
   const [createOpen, setCreateOpen] = useState(false);
   const [createName, setCreateName] = useState('');
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<WalletSummary | null>(null);
 
   const invalidate = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ['wallets'] });
@@ -28,23 +34,33 @@ export function Carteiras() {
       setCreateOpen(false);
       setCreateName('');
       setSelectedId(wallet.id);
+      setActionError(null);
       invalidate();
     },
+    onError: (err) => setActionError(messageFrom(err)),
   });
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => deleteWallet(id),
     onSuccess: () => {
       setSelectedId(null);
+      setActionError(null);
       invalidate();
     },
+    onError: (err) => setActionError(messageFrom(err)),
   });
 
   const toggleMutation = useMutation({
     mutationFn: (wallet: WalletSummary) =>
       updateWallet(wallet.id, { status: wallet.status === 'open' ? 'finalized' : 'open' }),
-    onSuccess: invalidate,
+    onSuccess: () => {
+      setActionError(null);
+      invalidate();
+    },
+    onError: (err) => setActionError(messageFrom(err)),
   });
+
+  const anyPending = createMutation.isPending || deleteMutation.isPending || toggleMutation.isPending;
 
   if (isLoading) {
     return <div className="rounded-2xl border border-slate-200 bg-white px-5 py-10 text-center text-sm text-slate-500" role="status">Carregando carteiras...</div>;
@@ -64,12 +80,19 @@ export function Carteiras() {
         <button
           type="button"
           onClick={() => setCreateOpen(true)}
-          className="inline-flex items-center gap-2 rounded-xl bg-blue-700 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-blue-800"
+          disabled={anyPending}
+          className="inline-flex items-center gap-2 rounded-xl bg-blue-700 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:bg-slate-400"
         >
           <Plus size={16} aria-hidden="true" />
           Nova carteira
         </button>
       </header>
+
+      {actionError && (
+        <p role="alert" className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+          {actionError}
+        </p>
+      )}
 
       {createOpen && (
         <form
@@ -89,10 +112,10 @@ export function Carteiras() {
             />
           </label>
           <div className="flex gap-2">
-            <button type="submit" className="rounded-lg bg-blue-700 px-4 py-2 text-sm font-bold text-white transition hover:bg-blue-800">
+            <button type="submit" disabled={anyPending} className="rounded-lg bg-blue-700 px-4 py-2 text-sm font-bold text-white transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:bg-slate-400">
               Criar
             </button>
-            <button type="button" onClick={() => setCreateOpen(false)} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-bold text-slate-600 transition hover:bg-slate-50">
+            <button type="button" onClick={() => setCreateOpen(false)} disabled={anyPending} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-bold text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50">
               Cancelar
             </button>
           </div>
@@ -134,15 +157,17 @@ export function Carteiras() {
                 <button
                   type="button"
                   onClick={() => toggleMutation.mutate(wallet)}
-                  className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2 py-1 text-xs font-bold text-slate-600 transition hover:bg-slate-50"
+                  disabled={anyPending}
+                  className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2 py-1 text-xs font-bold text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {wallet.status === 'open' ? <Lock size={12} aria-hidden="true" /> : <Unlock size={12} aria-hidden="true" />}
                   {wallet.status === 'open' ? 'Finalizar' : 'Reabrir'}
                 </button>
                 <button
                   type="button"
-                  onClick={() => deleteMutation.mutate(wallet.id)}
-                  className="inline-flex items-center gap-1 rounded-lg border border-red-200 px-2 py-1 text-xs font-bold text-red-700 transition hover:bg-red-50"
+                  onClick={() => setConfirmDelete(wallet)}
+                  disabled={anyPending}
+                  className="inline-flex items-center gap-1 rounded-lg border border-red-200 px-2 py-1 text-xs font-bold text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <Trash2 size={12} aria-hidden="true" />
                   Excluir
@@ -150,6 +175,36 @@ export function Carteiras() {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {confirmDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl">
+            <h3 className="text-lg font-bold text-slate-900">Excluir carteira</h3>
+            <p className="mt-1 text-sm text-slate-500">
+              Excluir <strong>{confirmDelete.name}</strong> também remove seus {confirmDelete.gameCount} jogo{confirmDelete.gameCount === 1 ? '' : 's'}. Essa ação não pode ser desfeita.
+            </p>
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setConfirmDelete(null)}
+                className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-bold text-slate-600 transition hover:bg-slate-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  deleteMutation.mutate(confirmDelete.id);
+                  setConfirmDelete(null);
+                }}
+                className="rounded-lg bg-red-700 px-4 py-2 text-sm font-bold text-white transition hover:bg-red-800"
+              >
+                Excluir
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
@@ -161,22 +216,27 @@ function WalletDetailView({ id, onBack, onRemoved }: { id: number; onBack: () =>
   const { data: wallet, isLoading } = useWallet(id);
   const [editing, setEditing] = useState(false);
   const [nameDraft, setNameDraft] = useState('');
+  const [detailError, setDetailError] = useState<string | null>(null);
 
   const renameMutation = useMutation({
     mutationFn: (name: string) => updateWallet(id, { name }),
     onSuccess: () => {
       setEditing(false);
+      setDetailError(null);
       queryClient.invalidateQueries({ queryKey: ['wallets', id] });
       queryClient.invalidateQueries({ queryKey: ['wallets'] });
     },
+    onError: (err) => setDetailError(messageFrom(err)),
   });
 
   const removeGameMutation = useMutation({
     mutationFn: (gameId: number) => deleteWalletGame(id, gameId),
     onSuccess: () => {
+      setDetailError(null);
       queryClient.invalidateQueries({ queryKey: ['wallets', id] });
       onRemoved();
     },
+    onError: (err) => setDetailError(messageFrom(err)),
   });
 
   if (isLoading || !wallet) {
@@ -204,7 +264,7 @@ function WalletDetailView({ id, onBack, onRemoved }: { id: number; onBack: () =>
                 onChange={(e) => setNameDraft(e.target.value)}
                 className="rounded-lg border border-slate-300 px-2 py-1 text-sm outline-none focus:border-blue-600"
               />
-              <button type="submit" className="rounded-lg bg-blue-700 px-3 py-1 text-xs font-bold text-white">Salvar</button>
+              <button type="submit" disabled={renameMutation.isPending} className="rounded-lg bg-blue-700 px-3 py-1 text-xs font-bold text-white disabled:cursor-not-allowed disabled:bg-slate-400">Salvar</button>
               <button type="button" onClick={() => setEditing(false)} className="rounded-lg border border-slate-300 px-3 py-1 text-xs font-bold text-slate-600">Cancelar</button>
             </form>
           ) : (
@@ -221,6 +281,10 @@ function WalletDetailView({ id, onBack, onRemoved }: { id: number; onBack: () =>
         </div>
       </div>
 
+      {detailError && (
+        <p role="alert" className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{detailError}</p>
+      )}
+
       {wallet.games.length === 0 ? (
         <p className="rounded-xl border border-dashed border-slate-300 p-8 text-center text-sm text-slate-500">
           Esta carteira ainda não tem jogos.
@@ -233,7 +297,8 @@ function WalletDetailView({ id, onBack, onRemoved }: { id: number; onBack: () =>
               <button
                 type="button"
                 onClick={() => removeGameMutation.mutate(game.id)}
-                className="absolute right-3 top-3 inline-flex size-7 items-center justify-center rounded-md text-slate-400 transition hover:bg-red-50 hover:text-red-600"
+                disabled={removeGameMutation.isPending}
+                className="absolute right-3 top-3 inline-flex size-7 items-center justify-center rounded-md text-slate-400 transition hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-50"
                 aria-label="Remover jogo"
                 title="Remover jogo"
               >
