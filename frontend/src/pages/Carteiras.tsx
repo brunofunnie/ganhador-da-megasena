@@ -124,6 +124,7 @@ export function Carteiras() {
 
       {selectedId !== null ? (
         <WalletDetailView
+          key={selectedId}
           id={selectedId}
           onBack={() => setSelectedId(null)}
           onRemoved={invalidate}
