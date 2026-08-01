@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
-import { Check, Dice5, Wallet, WandSparkles } from 'lucide-react';
+import { Check, Dice5, Wallet, WandSparkles, X } from 'lucide-react';
+import { Dialog } from '@base-ui/react/dialog';
 import { fetchGenerate, fetchSimulate, addGameToWallet, createWallet, type GenerateResponse, type SimulationResponse } from '../lib/api';
 import { GameCard } from '../components/GameCard';
 import { NumberPicker } from '../components/NumberPicker';
@@ -114,10 +115,20 @@ export function Gerador() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [newWalletName, setNewWalletName] = useState('');
   const [saving, setSaving] = useState(false);
+  const [justSaved, setJustSaved] = useState(false);
 
   const handleSaveGame = useCallback((numbers: string[]) => {
     setSaveTarget(numbers);
     setSaveError(null);
+    setJustSaved(false);
+  }, []);
+
+  const closeAfterSave = useCallback(() => {
+    setJustSaved(true);
+    setTimeout(() => {
+      setSaveTarget(null);
+      setJustSaved(false);
+    }, 800);
   }, []);
 
   const confirmSave = useCallback(
@@ -127,7 +138,7 @@ export function Gerador() {
       setSaveError(null);
       try {
         await addGameToWallet(walletId, saveTarget);
-        setSaveTarget(null);
+        closeAfterSave();
         await queryClient.invalidateQueries({ queryKey: ['wallets'] });
       } catch (err) {
         console.error(err);
@@ -136,7 +147,7 @@ export function Gerador() {
         setSaving(false);
       }
     },
-    [saveTarget, queryClient],
+    [saveTarget, queryClient, closeAfterSave],
   );
 
   const createAndSave = useCallback(async () => {
@@ -146,7 +157,7 @@ export function Gerador() {
     try {
       const wallet = await createWallet(newWalletName.trim());
       await addGameToWallet(wallet.id, saveTarget);
-      setSaveTarget(null);
+      closeAfterSave();
       setNewWalletName('');
       await queryClient.invalidateQueries({ queryKey: ['wallets'] });
     } catch (err) {
@@ -155,7 +166,7 @@ export function Gerador() {
     } finally {
       setSaving(false);
     }
-  }, [saveTarget, newWalletName, queryClient]);
+  }, [saveTarget, newWalletName, queryClient, closeAfterSave]);
 
   return (
     <div className="space-y-6 text-slate-800">
@@ -391,74 +402,92 @@ export function Gerador() {
         onSaveGame={handleSaveGame}
       />
 
-      {saveTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
-          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl">
-            <h3 className="text-lg font-bold text-slate-900">Salvar jogo na carteira</h3>
-            <p className="mt-1 text-sm text-slate-500">
-              <span className="font-mono font-semibold text-slate-700">{saveTarget.join(',')}</span>
-            </p>
-
-            {saveError && (
-              <p role="alert" className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{saveError}</p>
-            )}
-
-            <div className="mt-4 max-h-64 space-y-2 overflow-y-auto">
-              {walletsData?.carteiras.map((wallet) => (
-                <button
-                  key={wallet.id}
-                  type="button"
-                  onClick={() => confirmSave(wallet.id)}
-                  disabled={saving}
-                  className="flex w-full items-center justify-between rounded-xl border border-slate-200 px-3 py-2.5 text-left text-sm font-semibold text-slate-800 transition hover:border-blue-400 hover:bg-blue-50 disabled:opacity-50"
+      <Dialog.Root
+        open={saveTarget !== null}
+        onOpenChange={(next) => {
+          if (!next && !saving) setSaveTarget(null);
+          if (next) setJustSaved(false);
+        }}
+      >
+        <Dialog.Portal>
+          <Dialog.Backdrop className="fixed inset-0 z-40 bg-slate-900/40 transition-opacity data-[open]:opacity-100 data-[closed]:opacity-0" />
+          <Dialog.Popup className="fixed inset-0 z-50 flex items-center justify-center p-4 outline-none">
+            <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl">
+              <div className="flex items-center justify-between">
+                <Dialog.Title className="text-lg font-bold text-slate-900">Salvar jogo na carteira</Dialog.Title>
+                <Dialog.Close
+                  className="inline-flex size-8 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100 disabled:opacity-50"
+                  aria-label="Fechar"
+                  disabled={saving || justSaved}
                 >
-                  <span className="flex items-center gap-2">
-                    <Wallet size={15} className={wallet.status === 'finalized' ? 'text-slate-400' : 'text-blue-700'} aria-hidden="true" />
-                    {wallet.name}
-                  </span>
-                  <span className="text-xs font-normal text-slate-400">{wallet.gameCount} jogos</span>
-                </button>
-              ))}
-              {walletsData?.carteiras.length === 0 && (
-                <p className="rounded-xl border border-dashed border-slate-300 p-4 text-center text-sm text-slate-500">
-                  Nenhuma carteira ainda. Crie a primeira abaixo.
-                </p>
+                  <X size={18} />
+                </Dialog.Close>
+              </div>
+              <p className="mt-1 text-sm text-slate-500">
+                <span className="font-mono font-semibold text-slate-700">{saveTarget?.join(',')}</span>
+              </p>
+
+              {saving && (
+                <p role="status" className="mt-3 text-sm text-slate-500">Salvando jogo...</p>
               )}
-            </div>
 
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                createAndSave();
-              }}
-              className="mt-4 flex gap-2 border-t border-slate-100 pt-4"
-            >
-              <input
-                value={newWalletName}
-                onChange={(e) => setNewWalletName(e.target.value)}
-                placeholder="Ou crie uma nova carteira..."
-                className="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20"
-              />
-              <button
-                type="submit"
-                disabled={saving || !newWalletName.trim()}
-                className="inline-flex items-center gap-1 rounded-lg bg-blue-700 px-3 py-2 text-sm font-bold text-white transition hover:bg-blue-800 disabled:bg-slate-400"
+              {justSaved && (
+                <p role="status" className="mt-3 text-sm font-semibold text-emerald-700">Jogo salvo na carteira!</p>
+              )}
+
+              {saveError && (
+                <p role="alert" className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{saveError}</p>
+              )}
+
+              <div className="mt-4 max-h-64 space-y-2 overflow-y-auto">
+                {walletsData?.carteiras.map((wallet) => (
+                  <button
+                    key={wallet.id}
+                    type="button"
+                    onClick={() => confirmSave(wallet.id)}
+                    disabled={saving || justSaved}
+                    className="flex w-full items-center justify-between rounded-xl border border-slate-200 px-3 py-2.5 text-left text-sm font-semibold text-slate-800 transition hover:border-blue-400 hover:bg-blue-50 disabled:opacity-50"
+                  >
+                    <span className="flex items-center gap-2">
+                      <Wallet size={15} className={wallet.status === 'finalized' ? 'text-slate-400' : 'text-blue-700'} aria-hidden="true" />
+                      {wallet.name}
+                    </span>
+                    <span className="text-xs font-normal text-slate-400">{wallet.gameCount} jogos</span>
+                  </button>
+                ))}
+                {walletsData?.carteiras.length === 0 && (
+                  <p className="rounded-xl border border-dashed border-slate-300 p-4 text-center text-sm text-slate-500">
+                    Nenhuma carteira ainda. Crie a primeira abaixo.
+                  </p>
+                )}
+              </div>
+
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  createAndSave();
+                }}
+                className="mt-4 flex gap-2 border-t border-slate-100 pt-4"
               >
-                <Check size={14} aria-hidden="true" />
-                Salvar
-              </button>
-            </form>
-
-            <button
-              type="button"
-              onClick={() => setSaveTarget(null)}
-              className="mt-3 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-bold text-slate-600 transition hover:bg-slate-50"
-            >
-              Cancelar
-            </button>
-          </div>
-        </div>
-      )}
+                <input
+                  value={newWalletName}
+                  onChange={(e) => setNewWalletName(e.target.value)}
+                  placeholder="Ou crie uma nova carteira..."
+                  className="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20"
+                />
+                <button
+                  type="submit"
+                  disabled={saving || justSaved || !newWalletName.trim()}
+                  className="inline-flex items-center gap-1 rounded-lg bg-blue-700 px-3 py-2 text-sm font-bold text-white transition hover:bg-blue-800 disabled:bg-slate-400"
+                >
+                  <Check size={14} aria-hidden="true" />
+                  Salvar
+                </button>
+              </form>
+            </div>
+          </Dialog.Popup>
+        </Dialog.Portal>
+      </Dialog.Root>
     </div>
   );
 }
