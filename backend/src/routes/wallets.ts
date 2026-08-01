@@ -70,8 +70,15 @@ router.patch('/wallets/:id', (req: Request, res: Response) => {
     res.json(wallet);
   } catch (err) {
     const message = err instanceof Error ? err.message : '';
-    const status = message === 'Carteira não encontrada' ? 404 : 400;
-    res.status(status).json({ error: message || 'Falha ao atualizar carteira' });
+    if (message === 'Carteira não encontrada') {
+      res.status(404).json({ error: message });
+      return;
+    }
+    if (message === 'Nome é obrigatório' || message === 'Status inválido') {
+      res.status(400).json({ error: message });
+      return;
+    }
+    res.status(500).json({ error: 'Falha ao atualizar carteira' });
   }
 });
 
