@@ -127,7 +127,13 @@ export function SimulationDrawer({
                   ))}
                   <span className="text-center">Salvar</span>
                 </div>
-                {result.jogos.map((jogo, index) => (
+                {[...result.jogos].sort((a, b) => {
+                  for (const k of ['6', '5', '4', '3']) {
+                    const diff = (b.acertos[k] ?? 0) - (a.acertos[k] ?? 0);
+                    if (diff !== 0) return diff;
+                  }
+                  return 0;
+                }).map((jogo, index) => (
                   <div
                     key={index}
                     className="grid grid-cols-[3rem_1fr_repeat(4,4.5rem)_4rem] items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm"
