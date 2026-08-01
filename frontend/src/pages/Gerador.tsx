@@ -413,7 +413,7 @@ export function Gerador() {
       <Dialog.Root
         open={saveTarget !== null}
         onOpenChange={(next) => {
-          if (!next && !saving) setSaveTarget(null);
+          if (!next && !saving && !justSaved) setSaveTarget(null);
           if (next) setJustSaved(false);
         }}
       >
