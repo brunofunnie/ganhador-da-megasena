@@ -7,6 +7,7 @@ import statisticsRoutes from './routes/statistics';
 import generateRoutes from './routes/generate';
 import strategiesRoutes from './routes/strategies';
 import simulateRoutes from './routes/simulate';
+import walletsRoutes from './routes/wallets';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -19,6 +20,7 @@ app.use('/api', statisticsRoutes);
 app.use('/api', generateRoutes);
 app.use('/api', strategiesRoutes);
 app.use('/api', simulateRoutes);
+app.use('/api', walletsRoutes);
 
 async function start() {
   initDb();
