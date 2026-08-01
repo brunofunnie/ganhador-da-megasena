@@ -1,9 +1,10 @@
 import { NavLink } from 'react-router-dom';
-import { BarChart3, Dices, History, LayoutDashboard, Trophy } from 'lucide-react';
+import { BarChart3, Dices, History, LayoutDashboard, Trophy, Wallet } from 'lucide-react';
 
 const links = [
   { to: '/', label: 'Painel', icon: LayoutDashboard },
   { to: '/gerador', label: 'Gerador & Simulador', icon: Dices },
+  { to: '/carteiras', label: 'Carteiras', icon: Wallet },
   { to: '/analise', label: 'Análise', icon: BarChart3 },
   { to: '/sorteios', label: 'Sorteios', icon: History },
 ];
