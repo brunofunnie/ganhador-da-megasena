@@ -189,44 +189,85 @@ export function fetchDrawAnalysis(concurso: number): Promise<DrawAnalysis> {
   return apiFetch(`/draws/${concurso}/analysis`);
 }
 
-export interface SavedNumbersComparison {
-  concurso: number;
-  data: string;
-  dezenas: string[];
-  hits: number;
-  matches: string[];
+export interface WalletSummary {
+  id: number;
+  name: string;
+  status: 'open' | 'finalized';
+  createdAt: string;
+  finalizedAt: string | null;
+  gameCount: number;
 }
 
-export interface SavedNumbersItem {
+export interface WalletGame {
   id: number;
   dezenas: string[];
   createdAt: string;
-  latestComparison: SavedNumbersComparison | null;
 }
 
-export interface SavedNumbersListResponse {
-  items: SavedNumbersItem[];
+export interface WalletDetail {
+  id: number;
+  name: string;
+  status: 'open' | 'finalized';
+  createdAt: string;
+  finalizedAt: string | null;
+  games: WalletGame[];
 }
 
-export function fetchSavedNumbers(): Promise<SavedNumbersListResponse> {
-  return apiFetch('/saved-numbers');
+export function fetchWallets(): Promise<{ carteiras: WalletSummary[] }> {
+  return apiFetch('/wallets');
 }
 
-export function saveNumbers(numbers: string[]): Promise<SavedNumbersItem> {
-  return fetch(`${BASE}/saved-numbers`, {
+export function createWallet(name: string): Promise<WalletSummary> {
+  return fetch(`${BASE}/wallets`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ numbers }),
+    body: JSON.stringify({ name }),
   }).then(async (res) => {
-    if (!res.ok) throw new Error(`API error: ${res.status}`);
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Erro ao criar carteira');
     return res.json();
   });
 }
 
-export function deleteSavedNumbers(id: number): Promise<void> {
-  return fetch(`${BASE}/saved-numbers/${id}`, { method: 'DELETE' }).then(async (res) => {
+export function fetchWallet(id: number): Promise<WalletDetail> {
+  return apiFetch(`/wallets/${id}`);
+}
+
+export function updateWallet(
+  id: number,
+  patch: { name?: string; status?: 'open' | 'finalized' }
+): Promise<WalletDetail> {
+  return fetch(`${BASE}/wallets/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(patch),
+  }).then(async (res) => {
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Erro ao atualizar carteira');
+    return res.json();
+  });
+}
+
+export function deleteWallet(id: number): Promise<void> {
+  return fetch(`${BASE}/wallets/${id}`, { method: 'DELETE' }).then(async (res) => {
     if (res.status === 204) return;
-    throw new Error(`API error: ${res.status}`);
+    throw new Error((await res.json().catch(() => ({}))).error || 'Erro ao excluir carteira');
+  });
+}
+
+export function addGameToWallet(id: number, dezenas: string[]): Promise<WalletGame> {
+  return fetch(`${BASE}/wallets/${id}/games`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ dezenas }),
+  }).then(async (res) => {
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Erro ao adicionar jogo');
+    return res.json();
+  });
+}
+
+export function deleteWalletGame(id: number, gameId: number): Promise<void> {
+  return fetch(`${BASE}/wallets/${id}/games/${gameId}`, { method: 'DELETE' }).then(async (res) => {
+    if (res.status === 204) return;
+    throw new Error((await res.json().catch(() => ({}))).error || 'Erro ao remover jogo');
   });
 }
 
