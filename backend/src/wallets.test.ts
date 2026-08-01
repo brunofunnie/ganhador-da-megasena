@@ -53,6 +53,10 @@ describe('wallet domain services', () => {
     expect(loaded?.name).toBe('Aposta do mês');
     expect(loaded?.games).toHaveLength(2);
     expect(loaded?.games[0].dezenas).toEqual(['01', '02', '03', '04', '05', '06']);
+
+    const created = createWallet('Consistência');
+    const loadedBack = getWallet(created.id);
+    expect(loadedBack?.createdAt).toBe(created.createdAt);
   });
 
   it('returns null for a wallet that does not exist', () => {
@@ -83,6 +87,11 @@ describe('wallet domain services', () => {
     expect(getWallet(wallet.id)?.games).toHaveLength(0);
   });
 
+  it('throws when removing a game that does not exist in the wallet', () => {
+    const wallet = createWallet('Carteira');
+    expect(() => removeGame(wallet.id, 999)).toThrow(/Jogo não encontrado/);
+  });
+
   it('deletes a wallet and its games in cascade', () => {
     const wallet = createWallet('Temporária');
     addGame(wallet.id, ['01', '02', '03', '04', '05', '06']);
@@ -98,6 +107,7 @@ describe('wallet domain services', () => {
     const wallet = createWallet('Carteira');
     expect(() => addGame(wallet.id, ['01', '02', '03'])).toThrow(/6 números/);
     expect(() => addGame(wallet.id, ['00', '01', '02', '03', '04', '05'])).toThrow(/entre 01 e 60/);
+    expect(() => addGame(wallet.id, ['0x10', '02', '03', '04', '05', '06'])).toThrow(/entre 01 e 60/);
     expect(() => addGame(wallet.id, ['01', '01', '02', '03', '04', '05'])).toThrow(/duplicados/);
     expect(getWallet(wallet.id)?.games).toHaveLength(0);
   });

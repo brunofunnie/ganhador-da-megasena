@@ -44,16 +44,21 @@ function hydrateWallet(row: WalletRow): Omit<WalletSummary, 'gameCount'> {
 }
 
 export function normalizeDezenas(input: string[]): string[] {
-  const numbers = input.map(value => Number(value.trim()));
-  if (numbers.length !== 6) {
+  if (input.length !== 6) {
     throw new Error('Cada jogo deve ter exatamente 6 números');
   }
-  const padded = numbers.map(value => value.toString().padStart(2, '0'));
-  for (const number of numbers) {
+  const numbers = input.map(value => {
+    const trimmed = value.trim();
+    if (!/^\d+$/.test(trimmed)) {
+      throw new Error('Cada número deve estar entre 01 e 60');
+    }
+    const number = Number(trimmed);
     if (!Number.isInteger(number) || number < 1 || number > 60) {
       throw new Error('Cada número deve estar entre 01 e 60');
     }
-  }
+    return number;
+  });
+  const padded = numbers.map(value => value.toString().padStart(2, '0'));
   if (new Set(padded).size !== 6) {
     throw new Error('Números duplicados não são permitidos');
   }
@@ -98,12 +103,13 @@ export function createWallet(name: string): WalletSummary {
   const db = getDb();
   const trimmed = name.trim();
   if (!trimmed) throw new Error('Nome é obrigatório');
-  const result = db.prepare('INSERT INTO wallets (name) VALUES (?)').run(trimmed);
+  const createdAt = new Date().toISOString();
+  const result = db.prepare('INSERT INTO wallets (name, created_at) VALUES (?, ?)').run(trimmed, createdAt);
   return {
     id: Number(result.lastInsertRowid),
     name: trimmed,
     status: 'open',
-    createdAt: new Date().toISOString(),
+    createdAt,
     finalizedAt: null,
     gameCount: 0
   };
@@ -144,14 +150,15 @@ export function addGame(walletId: number, dezenas: string[]): WalletGame {
   if (!wallet) throw new Error('Carteira não encontrada');
 
   const normalized = normalizeDezenas(dezenas);
+  const createdAt = new Date().toISOString();
   const result = db.prepare(
-    'INSERT INTO wallet_games (wallet_id, dezenas) VALUES (?, ?)'
-  ).run(walletId, JSON.stringify(normalized));
+    'INSERT INTO wallet_games (wallet_id, dezenas, created_at) VALUES (?, ?, ?)'
+  ).run(walletId, JSON.stringify(normalized), createdAt);
 
   return {
     id: Number(result.lastInsertRowid),
     dezenas: normalized,
-    createdAt: new Date().toISOString()
+    createdAt
   };
 }
 
@@ -159,5 +166,6 @@ export function removeGame(walletId: number, gameId: number): void {
   const db = getDb();
   const wallet = getWallet(walletId);
   if (!wallet) throw new Error('Carteira não encontrada');
-  db.prepare('DELETE FROM wallet_games WHERE id = ? AND wallet_id = ?').run(gameId, walletId);
+  const result = db.prepare('DELETE FROM wallet_games WHERE id = ? AND wallet_id = ?').run(gameId, walletId);
+  if (result.changes === 0) throw new Error('Jogo não encontrado');
 }
