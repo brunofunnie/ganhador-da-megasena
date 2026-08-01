@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { Dice5, WandSparkles } from 'lucide-react';
+import { Check, Dice5, Wallet, WandSparkles } from 'lucide-react';
 import { fetchGenerate, fetchSimulate, addGameToWallet, createWallet, type GenerateResponse, type SimulationResponse } from '../lib/api';
 import { GameCard } from '../components/GameCard';
 import { NumberPicker } from '../components/NumberPicker';
@@ -49,9 +49,6 @@ export function Gerador() {
   const [simError, setSimError] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerGames, setDrawerGames] = useState<string[][]>([]);
-
-  const [savingKey, setSavingKey] = useState<string | null>(null);
-  const [savedKeys, setSavedKeys] = useState<Record<string, boolean>>({});
 
   const { data: walletsData } = useWallets();
 
@@ -113,24 +110,52 @@ export function Gerador() {
     }
   }, [results, handleSimulateGame]);
 
-  const handleSaveGame = useCallback(
-    async (numbers: string[]) => {
-      const key = numbers.join(',');
-      setSavingKey(key);
+  const [saveTarget, setSaveTarget] = useState<string[] | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [newWalletName, setNewWalletName] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const handleSaveGame = useCallback((numbers: string[]) => {
+    setSaveTarget(numbers);
+    setSaveError(null);
+  }, []);
+
+  const confirmSave = useCallback(
+    async (walletId: number) => {
+      if (!saveTarget) return;
+      setSaving(true);
+      setSaveError(null);
       try {
-        const wallets = walletsData?.carteiras ?? [];
-        const walletId = wallets[0]?.id ?? (await createWallet('Meus jogos')).id;
-        await addGameToWallet(walletId, numbers);
-        setSavedKeys((current) => ({ ...current, [key]: true }));
+        await addGameToWallet(walletId, saveTarget);
+        setSaveTarget(null);
         await queryClient.invalidateQueries({ queryKey: ['wallets'] });
       } catch (err) {
         console.error(err);
+        setSaveError('Não foi possível salvar o jogo. Tente novamente.');
       } finally {
-        setSavingKey(null);
+        setSaving(false);
       }
     },
-    [walletsData, queryClient],
+    [saveTarget, queryClient],
   );
+
+  const createAndSave = useCallback(async () => {
+    if (!saveTarget || !newWalletName.trim()) return;
+    setSaving(true);
+    setSaveError(null);
+    try {
+      const wallet = await createWallet(newWalletName.trim());
+      await addGameToWallet(wallet.id, saveTarget);
+      setSaveTarget(null);
+      setNewWalletName('');
+      await queryClient.invalidateQueries({ queryKey: ['wallets'] });
+    } catch (err) {
+      console.error(err);
+      setSaveError('Não foi possível criar a carteira e salvar o jogo. Tente novamente.');
+    } finally {
+      setSaving(false);
+    }
+  }, [saveTarget, newWalletName, queryClient]);
 
   return (
     <div className="space-y-6 text-slate-800">
@@ -364,9 +389,76 @@ export function Gerador() {
         onRandomCountChange={setRandomCount}
         onRunSimulation={handleRunSimulation}
         onSaveGame={handleSaveGame}
-        savingKey={savingKey}
-        savedKeys={savedKeys}
       />
+
+      {saveTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl">
+            <h3 className="text-lg font-bold text-slate-900">Salvar jogo na carteira</h3>
+            <p className="mt-1 text-sm text-slate-500">
+              <span className="font-mono font-semibold text-slate-700">{saveTarget.join(',')}</span>
+            </p>
+
+            {saveError && (
+              <p role="alert" className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{saveError}</p>
+            )}
+
+            <div className="mt-4 max-h-64 space-y-2 overflow-y-auto">
+              {walletsData?.carteiras.map((wallet) => (
+                <button
+                  key={wallet.id}
+                  type="button"
+                  onClick={() => confirmSave(wallet.id)}
+                  disabled={saving}
+                  className="flex w-full items-center justify-between rounded-xl border border-slate-200 px-3 py-2.5 text-left text-sm font-semibold text-slate-800 transition hover:border-blue-400 hover:bg-blue-50 disabled:opacity-50"
+                >
+                  <span className="flex items-center gap-2">
+                    <Wallet size={15} className={wallet.status === 'finalized' ? 'text-slate-400' : 'text-blue-700'} aria-hidden="true" />
+                    {wallet.name}
+                  </span>
+                  <span className="text-xs font-normal text-slate-400">{wallet.gameCount} jogos</span>
+                </button>
+              ))}
+              {walletsData?.carteiras.length === 0 && (
+                <p className="rounded-xl border border-dashed border-slate-300 p-4 text-center text-sm text-slate-500">
+                  Nenhuma carteira ainda. Crie a primeira abaixo.
+                </p>
+              )}
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                createAndSave();
+              }}
+              className="mt-4 flex gap-2 border-t border-slate-100 pt-4"
+            >
+              <input
+                value={newWalletName}
+                onChange={(e) => setNewWalletName(e.target.value)}
+                placeholder="Ou crie uma nova carteira..."
+                className="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20"
+              />
+              <button
+                type="submit"
+                disabled={saving || !newWalletName.trim()}
+                className="inline-flex items-center gap-1 rounded-lg bg-blue-700 px-3 py-2 text-sm font-bold text-white transition hover:bg-blue-800 disabled:bg-slate-400"
+              >
+                <Check size={14} aria-hidden="true" />
+                Salvar
+              </button>
+            </form>
+
+            <button
+              type="button"
+              onClick={() => setSaveTarget(null)}
+              className="mt-3 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-bold text-slate-600 transition hover:bg-slate-50"
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

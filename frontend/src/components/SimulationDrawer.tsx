@@ -16,8 +16,6 @@ interface SimulationDrawerProps {
   onRandomCountChange: (count: number) => void;
   onRunSimulation: () => void;
   onSaveGame: (numbers: string[]) => void;
-  savingKey: string | null;
-  savedKeys: Record<string, boolean>;
 }
 
 export function SimulationDrawer({
@@ -33,8 +31,6 @@ export function SimulationDrawer({
   onRandomCountChange,
   onRunSimulation,
   onSaveGame,
-  savingKey,
-  savedKeys,
 }: SimulationDrawerProps) {
   return (
     <Drawer.Root open={open} onOpenChange={(next) => !next && onClose()}>
@@ -153,11 +149,10 @@ export function SimulationDrawer({
                     <button
                       type="button"
                       onClick={() => onSaveGame(jogo.numeros)}
-                      disabled={savingKey === jogo.numeros.join(',')}
-                      className="inline-flex items-center justify-center gap-1 rounded-lg border border-blue-700 px-2 py-1 text-xs font-bold text-blue-700 transition hover:bg-blue-50 disabled:opacity-50"
+                      className="inline-flex items-center justify-center gap-1 rounded-lg border border-blue-700 px-2 py-1 text-xs font-bold text-blue-700 transition hover:bg-blue-50"
                     >
-                      <Save size={13} />
-                      {savedKeys[jogo.numeros.join(',')] ? 'Salvo' : savingKey === jogo.numeros.join(',') ? '...' : 'Salvar'}
+                      <Save size={13} aria-hidden="true" />
+                      Salvar
                     </button>
                   </div>
                 ))}
