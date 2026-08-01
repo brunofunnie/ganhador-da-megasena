@@ -1,10 +1,11 @@
 import { useCallback, useState } from 'react';
 import { Dice5, WandSparkles } from 'lucide-react';
-import { fetchGenerate, fetchSimulate, saveNumbers, type GenerateResponse, type SimulationResponse } from '../lib/api';
+import { fetchGenerate, fetchSimulate, addGameToWallet, createWallet, type GenerateResponse, type SimulationResponse } from '../lib/api';
 import { GameCard } from '../components/GameCard';
 import { NumberPicker } from '../components/NumberPicker';
 import { SimulationDrawer } from '../components/SimulationDrawer';
 import { useQueryClient } from '@tanstack/react-query';
+import { useWallets } from '../hooks/useWallets';
 
 const MODES = [
   { value: 'random', label: 'Aleatório Puro' },
@@ -51,6 +52,8 @@ export function Gerador() {
 
   const [savingKey, setSavingKey] = useState<string | null>(null);
   const [savedKeys, setSavedKeys] = useState<Record<string, boolean>>({});
+
+  const { data: walletsData } = useWallets();
 
   const handleGenerate = useCallback(async () => {
     setLoading(true);
@@ -115,16 +118,18 @@ export function Gerador() {
       const key = numbers.join(',');
       setSavingKey(key);
       try {
-        await saveNumbers(numbers);
+        const wallets = walletsData?.carteiras ?? [];
+        const walletId = wallets[0]?.id ?? (await createWallet('Meus jogos')).id;
+        await addGameToWallet(walletId, numbers);
         setSavedKeys((current) => ({ ...current, [key]: true }));
-        await queryClient.invalidateQueries({ queryKey: ['saved-numbers'] });
+        await queryClient.invalidateQueries({ queryKey: ['wallets'] });
       } catch (err) {
         console.error(err);
       } finally {
         setSavingKey(null);
       }
     },
-    [queryClient],
+    [walletsData, queryClient],
   );
 
   return (

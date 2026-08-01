@@ -270,5 +270,3 @@ export function deleteWalletGame(id: number, gameId: number): Promise<void> {
     throw new Error((await res.json().catch(() => ({}))).error || 'Erro ao remover jogo');
   });
 }
-
-
