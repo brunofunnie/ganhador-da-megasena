@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Check, Dice5, Wallet, WandSparkles, X } from 'lucide-react';
 import { Dialog } from '@base-ui/react/dialog';
 import { fetchGenerate, fetchSimulate, addGameToWallet, createWallet, type GenerateResponse, type SimulationResponse } from '../lib/api';
@@ -116,8 +116,16 @@ export function Gerador() {
   const [newWalletName, setNewWalletName] = useState('');
   const [saving, setSaving] = useState(false);
   const [justSaved, setJustSaved] = useState(false);
+  const saveCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (saveCloseTimer.current !== null) clearTimeout(saveCloseTimer.current);
+    };
+  }, []);
 
   const handleSaveGame = useCallback((numbers: string[]) => {
+    if (saveCloseTimer.current !== null) clearTimeout(saveCloseTimer.current);
     setSaveTarget(numbers);
     setSaveError(null);
     setJustSaved(false);
@@ -125,7 +133,7 @@ export function Gerador() {
 
   const closeAfterSave = useCallback(() => {
     setJustSaved(true);
-    setTimeout(() => {
+    saveCloseTimer.current = setTimeout(() => {
       setSaveTarget(null);
       setJustSaved(false);
     }, 800);
