@@ -442,75 +442,73 @@ function WalletDetailView({ id, onBack, onRemoved }: { id: number; onBack: () =>
         <p role="alert" className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{detailError}</p>
       )}
 
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <CopyGamesButton games={wallet.games} label="Copiar jogos" />
+          <button
+            type="button"
+            onClick={() => setImportOpen(true)}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-bold text-slate-600 transition hover:border-blue-300 hover:bg-blue-50"
+          >
+            <Upload size={13} aria-hidden="true" />
+            Importar jogos
+          </button>
+          <button
+            type="button"
+            onClick={() => setCheckDraw((value) => !value)}
+            disabled={drawnNumbers.length === 0}
+            className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-40 ${
+              checkDraw
+                ? 'border-yellow-300 bg-yellow-400 text-blue-950'
+                : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+            }`}
+            aria-pressed={checkDraw}
+            title={drawnNumbers.length ? `Checar com o concurso ${status?.latestDraw?.concurso}` : 'Sem sorteio disponível para checagem'}
+          >
+            {checkDraw && <CheckCircle2 size={13} aria-hidden="true" />}
+            Checar com o sorteio atual
+          </button>
+        </div>
+        <div className="flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-100 p-0.5">
+          <button
+            type="button"
+            onClick={() => setViewMode('table')}
+            className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-bold transition ${
+              viewMode === 'table' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+            }`}
+            aria-pressed={viewMode === 'table'}
+          >
+            <List size={13} aria-hidden="true" />
+            Tabela
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode('cards')}
+            className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-bold transition ${
+              viewMode === 'cards' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+            }`}
+            aria-pressed={viewMode === 'cards'}
+          >
+            <LayoutGrid size={13} aria-hidden="true" />
+            Cards
+          </button>
+        </div>
+      </div>
+
       {wallet.games.length === 0 ? (
         <p className="rounded-xl border border-dashed border-slate-300 p-8 text-center text-sm text-slate-500">
           Esta carteira ainda não tem jogos.
         </p>
-      ) : (
-        <div>
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <CopyGamesButton games={wallet.games} label="Copiar jogos" />
-              <button
-                type="button"
-                onClick={() => setImportOpen(true)}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-bold text-slate-600 transition hover:border-blue-300 hover:bg-blue-50"
-              >
-                <Upload size={13} aria-hidden="true" />
-                Importar jogos
-              </button>
-              <button
-                type="button"
-                onClick={() => setCheckDraw((value) => !value)}
-                disabled={drawnNumbers.length === 0}
-                className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-40 ${
-                  checkDraw
-                    ? 'border-yellow-300 bg-yellow-400 text-blue-950'
-                    : 'border-slate-200 text-slate-600 hover:bg-slate-50'
-                }`}
-                aria-pressed={checkDraw}
-                title={drawnNumbers.length ? `Checar com o concurso ${status?.latestDraw?.concurso}` : 'Sem sorteio disponível para checagem'}
-              >
-                {checkDraw && <CheckCircle2 size={13} aria-hidden="true" />}
-                Checar com o sorteio atual
-              </button>
-            </div>
-            <div className="flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-100 p-0.5">
-              <button
-                type="button"
-                onClick={() => setViewMode('table')}
-                className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-bold transition ${
-                  viewMode === 'table' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-                }`}
-                aria-pressed={viewMode === 'table'}
-              >
-                <List size={13} aria-hidden="true" />
-                Tabela
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewMode('cards')}
-                className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-bold transition ${
-                  viewMode === 'cards' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-                }`}
-                aria-pressed={viewMode === 'cards'}
-              >
-                <LayoutGrid size={13} aria-hidden="true" />
-                Cards
-              </button>
-            </div>
-          </div>
-
-          {viewMode === 'table' ? (
-            <div className="overflow-x-auto rounded-xl border border-slate-200">
-              <table className="min-w-[560px] w-full text-sm">
-                <thead>
-                  <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs font-bold uppercase tracking-wide text-slate-500">
-                    <th scope="col" className="px-3 py-2">#</th>
-                    <th scope="col" className="px-3 py-2">Jogo</th>
-                    {checkDraw && <th scope="col" className="px-3 py-2 text-center">Acertos</th>}
-                    <th scope="col" className="px-3 py-2 text-right">Ações</th>
-                  </tr>
+      ) : viewMode === 'table' ? (
+        <div className="overflow-x-auto rounded-xl border border-slate-200">
+          <table className="min-w-[560px] w-full text-sm">
+            <thead>
+              <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs font-bold uppercase tracking-wide text-slate-500">
+                <th scope="col" className="px-3 py-2">#</th>
+                <th scope="col" className="px-3 py-2">Jogo</th>
+                {checkDraw && <th scope="col" className="px-3 py-2 text-center">Acertos</th>}
+                <th scope="col" className="px-3 py-2 text-right">Ações</th>
+              </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {wallet.games.map((game, index) => {
@@ -570,8 +568,6 @@ function WalletDetailView({ id, onBack, onRemoved }: { id: number; onBack: () =>
               ))}
             </div>
           )}
-        </div>
-      )}
 
       {confirmRemoveGame && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
