@@ -46,7 +46,7 @@ export function Dashboard() {
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.14em] text-[#ffd64d]"><Sparkles size={15} aria-hidden="true" /> Último sorteio</p>
-              <h2 className="mt-2 text-xl font-bold">Concurso {status.latestDraw.concurso}</h2>
+              <h2 className="mt-2 text-xl font-bold text-white">Concurso {status.latestDraw.concurso}</h2>
               <p className="mt-1 text-sm text-blue-100">Resultado apurado em {status.latestDraw.data}</p>
             </div>
             <span className="w-fit rounded-full border border-white/25 bg-white/10 px-3 py-1 text-xs font-medium text-blue-50">Mega-Sena</span>
