@@ -93,6 +93,7 @@ function ImportGamesModal({ walletId, onClose, onImported }: { walletId: number;
   const [text, setText] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
+  const [result, setResult] = useState<{ added: number; skipped: number } | null>(null);
 
   const games = parseImportedGames(text);
   const validCount = games.filter((g) => g.length === 6).length;
@@ -102,17 +103,24 @@ function ImportGamesModal({ walletId, onClose, onImported }: { walletId: number;
     setImporting(true);
     setError(null);
     try {
-      const result = await importGamesToWallet(walletId, games);
+      const importResult = await importGamesToWallet(walletId, games);
       queryClient.invalidateQueries({ queryKey: ['wallets', walletId] });
       queryClient.invalidateQueries({ queryKey: ['wallets'] });
       onImported();
-      onClose();
-      alert(`Importados ${result.added} jogo(s).${result.skipped > 0 ? ` ${result.skipped} ignorado(s).` : ''}`);
+      setResult(importResult);
     } catch (err) {
       setError(messageFrom(err));
     } finally {
       setImporting(false);
     }
+  };
+
+  const handleClose = () => {
+    if (importing) return;
+    setResult(null);
+    setText('');
+    setError(null);
+    onClose();
   };
 
   return (
@@ -126,33 +134,61 @@ function ImportGamesModal({ walletId, onClose, onImported }: { walletId: number;
           value={text}
           onChange={(e) => setText(e.target.value)}
           rows={8}
+          disabled={importing || result !== null}
           placeholder={'01,02,03,04,05,06\n07,08,09,10,11,12\n13,14,15,16,17,18'}
-          className="mt-4 w-full resize-y rounded-lg border border-slate-300 bg-white px-3 py-2 font-mono text-sm leading-6 outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20"
+          className="mt-4 w-full resize-y rounded-lg border border-slate-300 bg-white px-3 py-2 font-mono text-sm leading-6 outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20 disabled:bg-slate-50"
         />
         {error && (
           <p role="alert" className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{error}</p>
         )}
-        <p className="mt-2 text-xs text-slate-500">
-          {games.length === 0 ? 'Nenhuma linha informada' : `${validCount} de ${games.length} jogos válidos`}
-        </p>
+        {result && (
+          <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-3 text-sm" role="status">
+            <p className="font-bold text-emerald-800">
+              Importados {result.added} jogo{result.added === 1 ? '' : 's'}!
+            </p>
+            {result.skipped > 0 && (
+              <p className="mt-1 text-emerald-700">
+                {result.skipped} jogo{result.skipped === 1 ? '' : 's'} ignorado{result.skipped === 1 ? '' : 's'} (inválido{result.skipped === 1 ? '' : 's'} ou duplicado{result.skipped === 1 ? '' : 's'}).
+              </p>
+            )}
+          </div>
+        )}
+        {!result && (
+          <p className="mt-2 text-xs text-slate-500">
+            {games.length === 0 ? 'Nenhuma linha informada' : `${validCount} de ${games.length} jogos válidos`}
+          </p>
+        )}
         <div className="mt-4 flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={importing}
-            className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-bold text-slate-600 transition hover:bg-slate-50 disabled:opacity-50"
-          >
-            Cancelar
-          </button>
-          <button
-            type="button"
-            onClick={handleImport}
-            disabled={importing || validCount === 0}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-blue-700 px-4 py-2 text-sm font-bold text-white transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:bg-slate-400"
-          >
-            <Upload size={15} aria-hidden="true" />
-            {importing ? 'Importando...' : 'Importar'}
-          </button>
+          {result ? (
+            <button
+              type="button"
+              onClick={handleClose}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-blue-700 px-4 py-2 text-sm font-bold text-white transition hover:bg-blue-800"
+            >
+              <Check size={15} aria-hidden="true" />
+              Concluir
+            </button>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={handleClose}
+                disabled={importing}
+                className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-bold text-slate-600 transition hover:bg-slate-50 disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleImport}
+                disabled={importing || validCount === 0}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-blue-700 px-4 py-2 text-sm font-bold text-white transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:bg-slate-400"
+              >
+                <Upload size={15} aria-hidden="true" />
+                {importing ? 'Importando...' : 'Importar'}
+              </button>
+            </>
+          )}
         </div>
       </div>
     </div>
