@@ -11,7 +11,7 @@ let server: http.Server;
 let baseUrl: string;
 const app = express();
 
-app.use('/api/draws', drawsRoutes);
+app.use('/api', drawsRoutes);
 
 function cleanup() {
   for (const suffix of ['', '-shm', '-wal']) {

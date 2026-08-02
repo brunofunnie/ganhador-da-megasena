@@ -35,7 +35,7 @@ function invalidRequest(res: Response, error: string): void {
   res.status(400).json({ error });
 }
 
-router.get('/', (req: Request, res: Response) => {
+router.get('/draws', (req: Request, res: Response) => {
   try {
     const page = parsePositiveInteger(req.query.page, 1);
     const limit = parsePositiveInteger(req.query.limit, 20);
@@ -62,7 +62,7 @@ router.get('/', (req: Request, res: Response) => {
   }
 });
 
-router.get('/:concurso/analysis', (req: Request, res: Response) => {
+router.get('/draws/:concurso/analysis', (req: Request, res: Response) => {
   const concurso = parseConcurso(req.params.concurso);
   if (concurso === null) {
     invalidRequest(res, 'Número de concurso inválido');
@@ -81,7 +81,7 @@ router.get('/:concurso/analysis', (req: Request, res: Response) => {
   }
 });
 
-router.get('/:concurso', (req: Request, res: Response) => {
+router.get('/draws/:concurso', (req: Request, res: Response) => {
   const concurso = parseConcurso(req.params.concurso);
   if (concurso === null) {
     invalidRequest(res, 'Número de concurso inválido');

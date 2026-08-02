@@ -23,7 +23,7 @@ app.use('/api', generateRoutes);
 app.use('/api', strategiesRoutes);
 app.use('/api', simulateRoutes);
 app.use('/api', walletsRoutes);
-app.use('/api/draws', drawsRoutes);
+app.use('/api', drawsRoutes);
 
 async function start() {
   initDb();
