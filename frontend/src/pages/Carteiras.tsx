@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Check, CheckCircle2, Copy, LayoutGrid, List, Pencil, Trash2, Wallet, Plus, Lock, Unlock, Upload } from 'lucide-react';
+import { ArrowDownWideNarrow, Check, CheckCircle2, Copy, LayoutGrid, List, Pencil, Trash2, Wallet, Plus, Lock, Unlock, Upload } from 'lucide-react';
 import {
   createWallet,
   deleteWallet,
@@ -406,9 +406,16 @@ function WalletDetailView({ id, onBack, onRemoved }: { id: number; onBack: () =>
   const [confirmRemoveGame, setConfirmRemoveGame] = useState<WalletGame | null>(null);
   const [viewMode, setViewMode] = useState<'table' | 'cards'>('table');
   const [checkDraw, setCheckDraw] = useState(false);
+  const [sortByHits, setSortByHits] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
 
   const drawnNumbers = status?.latestDraw?.dezenas ?? [];
+
+  const games = checkDraw && sortByHits
+    ? [...wallet?.games ?? []].sort((a, b) =>
+        b.dezenas.filter((n) => drawnNumbers.includes(n)).length - a.dezenas.filter((n) => drawnNumbers.includes(n)).length
+      )
+    : (wallet?.games ?? []);
 
   const renameMutation = useMutation({
     mutationFn: (name: string) => updateWallet(id, { name }),
@@ -504,6 +511,21 @@ function WalletDetailView({ id, onBack, onRemoved }: { id: number; onBack: () =>
             {checkDraw && <CheckCircle2 size={13} aria-hidden="true" />}
             Checar com o sorteio atual
           </button>
+          <button
+            type="button"
+            onClick={() => setSortByHits((value) => !value)}
+            disabled={!checkDraw || drawnNumbers.length === 0}
+            className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-40 ${
+              sortByHits
+                ? 'border-blue-700 bg-blue-50 text-blue-800'
+                : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+            }`}
+            aria-pressed={sortByHits}
+            title="Ordenar jogos por quantidade de acertos"
+          >
+            <ArrowDownWideNarrow size={13} aria-hidden="true" />
+            Ordenar por acertos
+          </button>
         </div>
         <div className="flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-100 p-0.5">
           <button
@@ -547,7 +569,7 @@ function WalletDetailView({ id, onBack, onRemoved }: { id: number; onBack: () =>
               </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {wallet.games.map((game, index) => {
+                  {games.map((game, index) => {
                     const hits = checkDraw ? game.dezenas.filter((n) => drawnNumbers.includes(n)).length : 0;
                     return (
                       <tr key={game.id} className="hover:bg-slate-50">
@@ -592,7 +614,7 @@ function WalletDetailView({ id, onBack, onRemoved }: { id: number; onBack: () =>
             </div>
           ) : (
             <div className="grid gap-3 sm:grid-cols-2">
-              {wallet.games.map((game, index) => (
+              {games.map((game, index) => (
                 <GameCard
                   key={game.id}
                   numbers={game.dezenas}
