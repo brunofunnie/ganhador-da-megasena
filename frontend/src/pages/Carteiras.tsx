@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowDownWideNarrow, Check, CheckCircle2, Copy, LayoutGrid, List, Pencil, Trash2, Wallet, Plus, Lock, Unlock, Upload } from 'lucide-react';
+import { ArrowDownWideNarrow, Check, CheckCircle2, ChevronLeft, ChevronRight, Copy, LayoutGrid, List, Pencil, Trash2, Wallet, Plus, Lock, Unlock, Upload } from 'lucide-react';
 import {
   createWallet,
   deleteWallet,
@@ -13,6 +13,7 @@ import {
 } from '../lib/api';
 import { useWallet, useWallets } from '../hooks/useWallets';
 import { useStatus } from '../hooks/useStatus';
+import { useDraw } from '../hooks/useDraws';
 import { nextDrawName } from '../lib/utils';
 import { GameCard } from '../components/GameCard';
 
@@ -406,10 +407,20 @@ function WalletDetailView({ id, onBack, onRemoved }: { id: number; onBack: () =>
   const [confirmRemoveGame, setConfirmRemoveGame] = useState<WalletGame | null>(null);
   const [viewMode, setViewMode] = useState<'table' | 'cards'>('table');
   const [checkDraw, setCheckDraw] = useState(false);
+  const [checkConcurso, setCheckConcurso] = useState<number | null>(null);
+  const [concursoInput, setConcursoInput] = useState('');
   const [sortByHits, setSortByHits] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
 
-  const drawnNumbers = status?.latestDraw?.dezenas ?? [];
+  const latestConcurso = status?.latestDraw?.concurso ?? null;
+  const { data: checkedDraw, isError: checkedDrawMissing } = useDraw(checkDraw ? checkConcurso : null);
+  const drawnNumbers = checkDraw && !checkedDrawMissing ? checkedDraw?.dezenas ?? [] : [];
+
+  const applyConcurso = (value: number) => {
+    const clamped = Math.min(Math.max(1, value), latestConcurso ?? value);
+    setCheckConcurso(clamped);
+    setConcursoInput(String(clamped));
+  };
 
   const games = checkDraw && sortByHits
     ? [...wallet?.games ?? []].sort((a, b) =>
@@ -498,19 +509,62 @@ function WalletDetailView({ id, onBack, onRemoved }: { id: number; onBack: () =>
           </button>
           <button
             type="button"
-            onClick={() => setCheckDraw((value) => !value)}
-            disabled={drawnNumbers.length === 0}
+            onClick={() => {
+              if (!checkDraw && checkConcurso === null && latestConcurso) applyConcurso(latestConcurso);
+              setCheckDraw((value) => !value);
+            }}
+            disabled={latestConcurso === null}
             className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-40 ${
               checkDraw
                 ? 'border-yellow-300 bg-yellow-400 text-blue-950'
                 : 'border-slate-200 text-slate-600 hover:bg-slate-50'
             }`}
             aria-pressed={checkDraw}
-            title={drawnNumbers.length ? `Checar com o concurso ${status?.latestDraw?.concurso}` : 'Sem sorteio disponível para checagem'}
+            title={latestConcurso !== null ? 'Checar jogos com um concurso' : 'Sem sorteio disponível para checagem'}
           >
             {checkDraw && <CheckCircle2 size={13} aria-hidden="true" />}
-            Checar com o sorteio atual
+            Checar sorteio
           </button>
+          {checkDraw && checkConcurso !== null && (
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => applyConcurso(checkConcurso - 1)}
+                disabled={checkConcurso <= 1}
+                aria-label="Concurso anterior"
+                className="inline-flex items-center rounded-lg border border-slate-200 p-1.5 text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <ChevronLeft size={13} aria-hidden="true" />
+              </button>
+              <input
+                value={concursoInput}
+                onChange={(e) => setConcursoInput(e.target.value.replace(/\D/g, ''))}
+                onBlur={() => {
+                  const parsed = Number(concursoInput);
+                  if (Number.isInteger(parsed) && parsed > 0) applyConcurso(parsed);
+                  else setConcursoInput(String(checkConcurso));
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') e.currentTarget.blur();
+                }}
+                inputMode="numeric"
+                aria-label="Concurso para checagem"
+                className="w-16 rounded-lg border border-slate-300 px-2 py-1 text-center font-mono text-xs font-bold text-slate-700 outline-none focus:border-blue-600"
+              />
+              <button
+                type="button"
+                onClick={() => applyConcurso(checkConcurso + 1)}
+                disabled={latestConcurso !== null && checkConcurso >= latestConcurso}
+                aria-label="Próximo concurso"
+                className="inline-flex items-center rounded-lg border border-slate-200 p-1.5 text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <ChevronRight size={13} aria-hidden="true" />
+              </button>
+              {checkedDrawMissing && (
+                <span role="alert" className="text-xs font-bold text-red-600">Concurso não encontrado</span>
+              )}
+            </div>
+          )}
           <button
             type="button"
             onClick={() => setSortByHits((value) => !value)}
@@ -564,7 +618,7 @@ function WalletDetailView({ id, onBack, onRemoved }: { id: number; onBack: () =>
               <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs font-bold uppercase tracking-wide text-slate-500">
                 <th scope="col" className="px-3 py-2">#</th>
                 <th scope="col" className="px-3 py-2">Jogo</th>
-                {checkDraw && <th scope="col" className="px-3 py-2 text-center">Acertos</th>}
+                {checkDraw && <th scope="col" className="px-3 py-2 text-center">Acertos ({checkConcurso})</th>}
                 <th scope="col" className="px-3 py-2 text-right">Ações</th>
               </tr>
                 </thead>
