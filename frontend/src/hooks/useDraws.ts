@@ -14,6 +14,7 @@ export function useDraw(concurso: number | null | undefined) {
     queryKey: ['draw', concurso],
     queryFn: () => fetchDraw(concurso as number),
     enabled: typeof concurso === 'number' && concurso > 0,
+    placeholderData: keepPreviousData,
   });
 }
 
