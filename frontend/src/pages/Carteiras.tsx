@@ -413,7 +413,7 @@ function WalletDetailView({ id, onBack, onRemoved }: { id: number; onBack: () =>
   const [importOpen, setImportOpen] = useState(false);
 
   const latestConcurso = status?.latestDraw?.concurso ?? null;
-  const { data: checkedDraw, isError: checkedDrawMissing } = useDraw(checkDraw ? checkConcurso : null);
+  const { data: checkedDraw, isError: checkedDrawMissing } = useDraw(checkDraw ? checkConcurso : null, { keepPrevious: true });
   const drawnNumbers = checkDraw && !checkedDrawMissing ? checkedDraw?.dezenas ?? [] : [];
 
   const applyConcurso = (value: number) => {

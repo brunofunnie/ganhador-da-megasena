@@ -9,12 +9,13 @@ export function useDraws(filters: DrawFilters) {
   });
 }
 
-export function useDraw(concurso: number | null | undefined) {
+export function useDraw(concurso: number | null | undefined, options?: { keepPrevious?: boolean }) {
   return useQuery({
     queryKey: ['draw', concurso],
     queryFn: () => fetchDraw(concurso as number),
     enabled: typeof concurso === 'number' && concurso > 0,
-    placeholderData: keepPreviousData,
+    placeholderData: options?.keepPrevious ? keepPreviousData : undefined,
+    retry: (failureCount, error) => !String(error).includes('404') && failureCount < 2,
   });
 }
 
