@@ -51,13 +51,19 @@ api() { # METHOD PATH [JSON_BODY]
 echo "==> 1/4 host data directory"
 ssh_vps "mkdir -p '$LOTERIAS_DATA_DIR'" && echo "    $LOTERIAS_DATA_DIR ready"
 
-echo "==> 2/4 GitHub deploy key on $REPO_SLUG"
+echo "==> 2/4 GitHub access for the VPS key"
 PUBKEY="$(ssh_vps "ssh-keygen -y -f ~/.ssh/id_ed25519")"
-if gh api "repos/$REPO_SLUG/keys" --jq '.[].key' | grep -qF "$(echo "$PUBKEY" | cut -d' ' -f2)"; then
-    echo "    already present"
+PUBKEY_BLOB="$(echo "$PUBKEY" | cut -d' ' -f2)"
+if gh api user/keys --jq '.[].key' | grep -qF "$PUBKEY_BLOB"; then
+    # The VPS key is registered account-wide, so it already reaches every repo.
+    # GitHub rejects the same key as a per-repo deploy key ("key is already in
+    # use"), so there is nothing to add here.
+    echo "    account-level SSH key — repo access already granted"
+elif gh api "repos/$REPO_SLUG/keys" --jq '.[].key' | grep -qF "$PUBKEY_BLOB"; then
+    echo "    deploy key already present"
 else
     gh api "repos/$REPO_SLUG/keys" -f "title=jiban-deploy-key" -f "key=$PUBKEY" -F read_only=true >/dev/null
-    echo "    added (read-only)"
+    echo "    deploy key added (read-only)"
 fi
 
 echo "==> 3/4 Dockhand SSH git credential '$CRED_NAME'"
