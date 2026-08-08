@@ -1,0 +1,41 @@
+# Production stack "loterias" — deployed by Dockhand as a git stack on the
+# "Jiban" environment (build-on-deploy). Nothing here is used for local dev.
+#
+# The Cloudflare tunnel resolves the container by name on the shared network,
+# so the container name / alias MUST stay `loterias`
+# (ingress: loteria.funnie.dev -> http://loterias:3001).
+#
+# LOTERIAS_DATA_DIR is a Dockhand *secret* env override, which Dockhand injects
+# into the compose shell at deploy time. It holds the host directory that stores
+# the SQLite database, so the real path never lands in this repository.
+services:
+  loterias:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: loterias:latest
+    container_name: loterias
+    hostname: loterias
+    restart: unless-stopped
+    init: true
+    expose:
+      - "3001"
+    environment:
+      NODE_ENV: production
+      TZ: America/Sao_Paulo
+      PORT: "3001"
+      DB_PATH: /data/megasena.db
+      PUBLIC_DIR: /app/public
+    volumes:
+      # Host directory holding megasena.db (+ its -wal/-shm files).
+      - ${LOTERIAS_DATA_DIR:?set LOTERIAS_DATA_DIR as a Dockhand env override}:/data
+    networks:
+      jiban-shared:
+        aliases:
+          - loterias
+    labels:
+      dev.funnie.loterias.role: app
+
+networks:
+  jiban-shared:
+    external: true

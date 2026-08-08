@@ -1,5 +1,8 @@
 import express from 'express';
 import cors from 'cors';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { initDb } from './db';
 import { syncResults } from './sync';
 import { dedupeAllWallets } from './wallets';
@@ -24,6 +27,19 @@ app.use('/api', strategiesRoutes);
 app.use('/api', simulateRoutes);
 app.use('/api', walletsRoutes);
 app.use('/api', drawsRoutes);
+
+// In production the frontend build is copied into the image and served by this
+// same process, so the SPA and /api share an origin (frontend calls plain /api).
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const PUBLIC_DIR = process.env.PUBLIC_DIR || path.join(__dirname, '..', 'public');
+
+if (fs.existsSync(path.join(PUBLIC_DIR, 'index.html'))) {
+  app.use(express.static(PUBLIC_DIR));
+  // Client-side routing fallback for every non-/api path.
+  app.get(/^(?!\/api\/).*/, (_req, res) => {
+    res.sendFile(path.join(PUBLIC_DIR, 'index.html'));
+  });
+}
 
 async function start() {
   initDb();

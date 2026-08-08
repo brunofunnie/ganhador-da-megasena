@@ -1,0 +1,16 @@
+.git
+.gitignore
+.claude
+.serena
+.superpowers
+.worktrees
+.env
+.env.*
+docs
+scripts
+node_modules
+**/node_modules
+**/dist
+backend/data
+**/*.log
+**/*.test.ts

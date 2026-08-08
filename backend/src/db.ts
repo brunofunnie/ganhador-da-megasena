@@ -80,7 +80,8 @@ const DRAW_METADATA_COLUMNS: Array<[string, string]> = [
 ];
 
 export function initDb(dbPath?: string): void {
-  const resolvedPath = dbPath || path.join(__dirname, '..', 'data', 'megasena.db');
+  const resolvedPath =
+    dbPath || process.env.DB_PATH || path.join(__dirname, '..', 'data', 'megasena.db');
   const dir = path.dirname(resolvedPath);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 
