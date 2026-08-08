@@ -57,7 +57,7 @@ LOTERIAS_DATA_DIR=
 
 | Script | Purpose |
 |---|---|
-| `./bin/bootstrap-dockhand.sh` | One-time, idempotent: host data dir, GitHub read-only deploy key, Dockhand credential lookup, git-stack creation with the secret env override. |
+| `./bin/bootstrap-dockhand.sh` | One-time, idempotent: host data dir, GitHub key check, Dockhand credential lookup, git-stack creation with the secret env override. |
 | `./bin/copy-db.sh` | Copy the local SQLite database to `$LOTERIAS_DATA_DIR` on the VPS. Overwrites the remote DB. |
 | `./bin/deploy.sh [--no-push]` | `git push` → Dockhand sync → Dockhand deploy (build + `compose up`). Non-destructive. |
 
@@ -78,6 +78,17 @@ there is no local ingress file), point `loteria.funnie.dev` at
 
 - Dockhand git-stack create uses `stackName` (not `name`); `envVars` entries are
   `{key, value, isSecret}`.
+- The VPS SSH key (`~/.ssh/id_ed25519` on jiban, = Dockhand credential
+  `jiban-deploy-key`, id 2) is registered as an **account-level** GitHub SSH key,
+  so it already reaches this repo. GitHub refuses to accept a key that is
+  already in use as a per-repo deploy key, which is why bootstrap skips that
+  step instead of adding one.
+- A `502` on the public URL with the container healthy means the tunnel has no
+  ingress rule for the hostname. Verify with:
+  `ssh bruno@jiban.lan 'docker logs cloudflared 2>&1 | grep -o "config=.*" | tail -1'`
+  and check reachability inside the network with:
+  `ssh bruno@jiban.lan 'docker run --rm --network jiban-shared loterias:latest \
+   node -e "fetch(\"http://loterias:3001/api/status\").then(r=>console.log(r.status))"'`
 - Dockhand copies the repo to `/app/data/stacks/Jiban/loterias` inside its own
   container and runs compose there against the host `docker.sock`; bind-mount
   sources are therefore resolved on the **host**.
