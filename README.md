@@ -120,15 +120,15 @@ Pronto! Acesse:
 | Serviço | URL |
 |---|---|
 | **Frontend** | http://localhost:5173 |
-| **Backend** | http://localhost:3001 |
-| **API** | http://localhost:3001/api |
+| **Backend** | http://localhost:3002 |
+| **API** | http://localhost:3002/api |
 
 > No primeiro boot, o backend baixa automaticamente todo o histórico oficial da Mega-Sena. Depois disso, os resultados ficam armazenados em SQLite local (`backend/data/megasena.db`).
 
 ### Rodando separadamente
 
 ```bash
-# Backend (porta 3001)
+# Backend (porta 3002)
 cd backend && npm run dev
 
 # Frontend (porta 5173)

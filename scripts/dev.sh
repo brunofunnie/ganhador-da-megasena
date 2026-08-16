@@ -12,14 +12,14 @@ echo -e "${GREEN}Starting GanhaDorDaMegaSena...${NC}\n"
 # Trap to kill all child processes on exit
 trap 'kill 0' EXIT
 
-echo -e "${BLUE}→ Starting backend (port 3001)...${NC}"
+echo -e "${BLUE}→ Starting backend (port 3002)...${NC}"
 cd backend && npm run dev &
 
 echo -e "${YELLOW}→ Starting frontend (port 5173)...${NC}"
 cd frontend && npm run dev &
 
 echo -e "\n${GREEN}Both servers are running!${NC}"
-echo -e "  Backend:  http://localhost:3001"
+echo -e "  Backend:  http://localhost:3002"
 echo -e "  Frontend: http://localhost:5173"
 echo -e "\nPress Ctrl+C to stop both servers\n"
 
