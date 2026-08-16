@@ -143,6 +143,19 @@ export function fetchStatus(): Promise<StatusResponse> {
   return apiFetch('/status');
 }
 
+export interface SyncResponse {
+  mensagem: string;
+  inserted: number;
+  total: number;
+}
+
+export function triggerSync(): Promise<SyncResponse> {
+  return fetch(`${BASE}/sync`, { method: 'POST' }).then(async (res) => {
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Erro ao sincronizar');
+    return res.json();
+  });
+}
+
 export function fetchStatistics(): Promise<StatisticsResponse> {
   return apiFetch('/statistics');
 }

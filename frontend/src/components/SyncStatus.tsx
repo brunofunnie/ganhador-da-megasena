@@ -1,5 +1,6 @@
 import { useStatus } from '../hooks/useStatus';
-import { AlertCircle, CheckCircle2, LoaderCircle } from 'lucide-react';
+import { useSync } from '../hooks/useSync';
+import { AlertCircle, CheckCircle2, LoaderCircle, RefreshCw } from 'lucide-react';
 
 interface SyncStatusProps {
   compact?: boolean;
@@ -7,6 +8,7 @@ interface SyncStatusProps {
 
 export function SyncStatus({ compact = false }: SyncStatusProps) {
   const { data, isLoading, isError } = useStatus();
+  const sync = useSync();
 
   if (isLoading) {
     return (
@@ -28,12 +30,27 @@ export function SyncStatus({ compact = false }: SyncStatusProps) {
 
   return (
     <div className={`flex items-center gap-2 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-950 ${compact ? 'justify-between' : ''}`} role="status">
-      <CheckCircle2 className="size-4 shrink-0 text-blue-700" aria-hidden="true" />
+      {sync.isError ? (
+        <AlertCircle className="size-4 shrink-0 text-red-700" aria-hidden="true" />
+      ) : (
+        <CheckCircle2 className="size-4 shrink-0 text-blue-700" aria-hidden="true" />
+      )}
       <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
         <span><span className="text-blue-700">Concursos:</span> <strong>{data?.totalDraws ?? 0}</strong></span>
         <span><span className="text-blue-700">Último:</span> <strong>#{data?.latestConcurso ?? 0}</strong></span>
         {!compact && data?.lastSync && <span className="text-blue-700">Sincronizado: {new Date(data.lastSync).toLocaleString('pt-BR')}</span>}
+        {sync.isError && <span className="text-red-700">Falha ao sincronizar.</span>}
       </div>
+      <button
+        type="button"
+        onClick={() => sync.mutate()}
+        disabled={sync.isPending}
+        title="Sincronizar agora"
+        aria-label="Sincronizar agora"
+        className="ml-auto shrink-0 rounded p-1 text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-900 disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        <RefreshCw className={`size-4 ${sync.isPending ? 'animate-spin' : ''}`} aria-hidden="true" />
+      </button>
     </div>
   );
 }
