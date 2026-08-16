@@ -105,6 +105,55 @@ describe('sync', () => {
   });
 });
 
+describe('sync latest fallback', () => {
+  const LATEST_DB_PATH = path.join(__dirname, '..', 'data', 'sync-latest-test.db');
+
+  beforeAll(() => {
+    if (fs.existsSync(LATEST_DB_PATH)) fs.unlinkSync(LATEST_DB_PATH);
+    initDb(LATEST_DB_PATH);
+  });
+
+  afterAll(() => {
+    closeDb();
+    if (fs.existsSync(LATEST_DB_PATH)) fs.unlinkSync(LATEST_DB_PATH);
+  });
+
+  it('stores the draw from /latest when the full list lags behind', async () => {
+    global.fetch = vi.fn().mockImplementation((url: string) => {
+      if (String(url).endsWith('/latest')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            concurso: 3,
+            data: '15/01/2000',
+            dezenas: ['13', '14', '15', '16', '17', '18'],
+            loteria: 'megasena'
+          })
+        });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve(MOCK_RESULTS) });
+    });
+
+    const result = await syncResults();
+
+    expect(result.inserted).toBe(3);
+    expect(result.total).toBe(3);
+    const row = getDb().prepare('SELECT * FROM draws WHERE concurso = 3').get() as any;
+    expect(JSON.parse(row.dezenas)).toEqual(['13', '14', '15', '16', '17', '18']);
+  });
+
+  it('completes the sync when /latest fails but the full list succeeds', async () => {
+    global.fetch = vi.fn().mockImplementation((url: string) => {
+      if (String(url).endsWith('/latest')) {
+        return Promise.resolve({ ok: false, status: 500, statusText: 'Internal Server Error' });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve(MOCK_RESULTS) });
+    });
+
+    await expect(syncResults()).resolves.toMatchObject({ total: 2 });
+  });
+});
+
 describe('database compatibility', () => {
   afterAll(() => {
     closeDb();

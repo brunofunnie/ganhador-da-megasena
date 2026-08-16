@@ -90,7 +90,22 @@ export async function syncResults(): Promise<{ inserted: number; total: number }
     throw new Error(`API returned ${response.status}: ${response.statusText}`);
   }
 
-  const results: ApiResultado[] = await response.json();
+  const results: ApiResultado[] = [...await response.json()];
+
+  // The aggregate endpoint can lag one draw behind /latest right after a
+  // draw, so merge /latest in; it is best-effort and must not fail the sync.
+  try {
+    const latestResponse = await fetch(`${API_BASE}/${LOTERIA}/latest`);
+    if (latestResponse.ok) {
+      const latest: ApiResultado = await latestResponse.json();
+      if (typeof latest?.concurso === 'number' && !results.some((r) => r.concurso === latest.concurso)) {
+        results.push(latest);
+      }
+    }
+  } catch {
+    // ignore: the full list already fetched successfully
+  }
+
   const db = getDb();
 
   const insert = db.prepare(
