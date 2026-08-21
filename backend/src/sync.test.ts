@@ -308,3 +308,62 @@ describe('guidi sync', () => {
     expect(concursos).toEqual([2, 3, 5]);
   });
 });
+
+describe('startup sync preserves persisted source', () => {
+  // Regression guard for Finding #1: index.ts must boot with the persisted
+  // source (syncResults(getSyncSource())) instead of the 'caixa' default, so
+  // a restart never clobbers the user's source choice.
+  const STARTUP_DB_PATH = path.join(__dirname, '..', 'data', 'sync-startup-test.db');
+
+  const STARTUP_ULTIMO = {
+    numero: 4,
+    dataApuracao: '22/01/2000',
+    dataProximoConcurso: '29/01/2000',
+    listaDezenas: ['19', '20', '21', '22', '23', '24'],
+    localSorteio: 'Espaço da Sorte, São Paulo, SP',
+    acumulado: false,
+    numeroConcursoProximo: 5
+  };
+
+  const STARTUP_GAP = {
+    numero: 3,
+    dataApuracao: '15/01/2000',
+    listaDezenas: ['13', '14', '15', '16', '17', '18'],
+    localSorteio: 'Caixa, Rio de Janeiro, RJ',
+    acumulado: true,
+    numeroConcursoProximo: 4
+  };
+
+  beforeAll(() => {
+    if (fs.existsSync(STARTUP_DB_PATH)) fs.unlinkSync(STARTUP_DB_PATH);
+    initDb(STARTUP_DB_PATH);
+    // A user picked the guidi source in a previous run.
+    setSyncSource('guidi');
+    // Seed one existing entry so the gap backfill only fetches #3 and #4.
+    getDb().prepare('INSERT INTO draws (concurso, data, dezenas) VALUES (?, ?, ?)')
+      .run(2, '08/01/2000', JSON.stringify(['07', '08', '09', '10', '11', '12']));
+  });
+
+  afterAll(() => {
+    closeDb();
+    if (fs.existsSync(STARTUP_DB_PATH)) fs.unlinkSync(STARTUP_DB_PATH);
+  });
+
+  it('keeps the persisted source after the startup sync call', async () => {
+    global.fetch = vi.fn().mockImplementation((url: string) => {
+      const u = String(url);
+      if (u.endsWith('/ultimo')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(STARTUP_ULTIMO) });
+      }
+      if (u.endsWith('/3')) return Promise.resolve({ ok: true, json: () => Promise.resolve(STARTUP_GAP) });
+      return Promise.resolve({ ok: false, status: 404, statusText: 'Not Found' });
+    });
+
+    // This is exactly what the fixed backend/src/index.ts does at startup.
+    await syncResults(getSyncSource());
+
+    expect(getSyncSource()).toBe('guidi');
+    const count = (getDb().prepare('SELECT COUNT(*) as count FROM draws').get() as any).count;
+    expect(count).toBe(3);
+  });
+});

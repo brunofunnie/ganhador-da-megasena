@@ -4,7 +4,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { initDb } from './db';
-import { syncResults } from './sync';
+import { syncResults, getSyncSource } from './sync';
 import { dedupeAllWallets } from './wallets';
 import statusRoutes from './routes/status';
 import statisticsRoutes from './routes/statistics';
@@ -51,7 +51,9 @@ async function start() {
   }
 
   try {
-    const status = await syncResults();
+    // Boot with the persisted source so a restart never clobbers the user's
+    // choice back to the 'caixa' default (syncResults() would overwrite it).
+    const status = await syncResults(getSyncSource());
     console.log(`Sync complete: ${status.inserted} new, ${status.total} total draws`);
   } catch (err) {
     console.warn('Initial sync failed, using existing data:', err);

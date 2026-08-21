@@ -2,6 +2,7 @@ import { DrawPrize, DrawRecord, getDb } from './db';
 
 const API_BASE = 'https://loteriascaixa-api.herokuapp.com/api';
 const LOTERIA = 'megasena';
+const SYNC_META_SOURCE_KEY = 'last_sync_source';
 
 export type SyncSource = 'caixa' | 'guidi';
 export const SYNC_SOURCES: SyncSource[] = ['caixa', 'guidi'];
@@ -156,11 +157,13 @@ function persistDraws(draws: StoredDraw[]): { inserted: number; total: number } 
       valor_estimado_proximo_concurso
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   );
+  const findExisting = db.prepare('SELECT concurso FROM draws WHERE concurso = ?');
+  const upsertMeta = db.prepare('INSERT OR REPLACE INTO sync_meta (key, value) VALUES (?, ?)');
 
   const transaction = db.transaction(() => {
     let inserted = 0;
     for (const draw of draws) {
-      const existing = db.prepare('SELECT concurso FROM draws WHERE concurso = ?').get(draw.concurso);
+      const existing = findExisting.get(draw.concurso);
       if (!existing) inserted++;
       insert.run(
         draw.concurso, draw.data, draw.dezenas, draw.local, draw.concursoEspecial,
@@ -171,10 +174,11 @@ function persistDraws(draws: StoredDraw[]): { inserted: number; total: number } 
         draw.valorAcumuladoProximoConcurso, draw.valorEstimadoProximoConcurso
       );
     }
-    db.prepare('INSERT OR REPLACE INTO sync_meta (key, value) VALUES (?, ?)')
-      .run('last_sync', new Date().toISOString());
-    db.prepare('INSERT OR REPLACE INTO sync_meta (key, value) VALUES (?, ?)')
-      .run('total_draws', String(draws.length));
+    upsertMeta.run('last_sync', new Date().toISOString());
+    // Cumulative row count, not this run's batch size: caixa passes the full
+    // history but guidi passes only new/backfilled draws.
+    const total = db.prepare('SELECT COUNT(*) as count FROM draws').get() as { count: number };
+    upsertMeta.run('total_draws', String(total.count));
     return inserted;
   });
 
@@ -237,7 +241,9 @@ async function guidISync(): Promise<{ inserted: number; total: number }> {
     }
   }
 
-  if (typeof ultimoNumero === 'number' && ultimoNumero > 0) {
+  // Skip the re-persist when the last known draw is already in the store;
+  // only append when ultimo is genuinely newer than currentMax.
+  if (typeof ultimoNumero === 'number' && ultimoNumero > 0 && ultimoNumero > currentMax) {
     draws.push(normalizeGuidiDraw(ultimo));
   }
 
@@ -290,7 +296,7 @@ export function getSyncStatus() {
 
 export function getSyncSource(): SyncSource {
   const db = getDb();
-  const row = db.prepare("SELECT value FROM sync_meta WHERE key = 'last_sync_source'").get() as { value: string } | undefined;
+  const row = db.prepare("SELECT value FROM sync_meta WHERE key = ?").get(SYNC_META_SOURCE_KEY) as { value: string } | undefined;
   return row && SYNC_SOURCES.includes(row.value as SyncSource) ? (row.value as SyncSource) : 'caixa';
 }
 
@@ -298,5 +304,5 @@ export function setSyncSource(source: SyncSource): void {
   if (!SYNC_SOURCES.includes(source)) {
     throw new Error(`Unknown sync source: ${source}`);
   }
-  getDb().prepare('INSERT OR REPLACE INTO sync_meta (key, value) VALUES (?, ?)').run('last_sync_source', source);
+  getDb().prepare('INSERT OR REPLACE INTO sync_meta (key, value) VALUES (?, ?)').run(SYNC_META_SOURCE_KEY, source);
 }
