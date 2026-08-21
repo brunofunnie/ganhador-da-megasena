@@ -3,6 +3,9 @@ import { DrawPrize, DrawRecord, getDb } from './db';
 const API_BASE = 'https://loteriascaixa-api.herokuapp.com/api';
 const LOTERIA = 'megasena';
 
+export type SyncSource = 'caixa' | 'guidi';
+export const SYNC_SOURCES: SyncSource[] = ['caixa', 'guidi'];
+
 interface ApiResultado {
   loteria: string;
   concurso: number;
@@ -174,6 +177,20 @@ export function getSyncStatus() {
           valorEstimadoProximoConcurso: latest.valor_estimado_proximo_concurso
         }
       : null,
-    lastSync: lastSync?.value || null
+    lastSync: lastSync?.value || null,
+    syncSource: getSyncSource()
   };
+}
+
+export function getSyncSource(): SyncSource {
+  const db = getDb();
+  const row = db.prepare("SELECT value FROM sync_meta WHERE key = 'last_sync_source'").get() as { value: string } | undefined;
+  return row && SYNC_SOURCES.includes(row.value as SyncSource) ? (row.value as SyncSource) : 'caixa';
+}
+
+export function setSyncSource(source: SyncSource): void {
+  if (!SYNC_SOURCES.includes(source)) {
+    throw new Error(`Unknown sync source: ${source}`);
+  }
+  getDb().prepare('INSERT OR REPLACE INTO sync_meta (key, value) VALUES (?, ?)').run('last_sync_source', source);
 }

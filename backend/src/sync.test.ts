@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { initDb, getDb, closeDb } from './db';
-import { syncResults, getSyncStatus } from './sync';
+import { syncResults, getSyncStatus, getSyncSource, setSyncSource } from './sync';
 import Database from 'better-sqlite3';
 import fs from 'fs';
 import path from 'path';
@@ -80,6 +80,18 @@ describe('sync', () => {
       proximoConcurso: 3,
       valorEstimadoProximoConcurso: 40
     });
+  });
+
+  it('defaults to caixa, persists a chosen source, and reports it in status', () => {
+    expect(getSyncSource()).toBe('caixa');
+    setSyncSource('guidi');
+    expect(getSyncSource()).toBe('guidi');
+    expect(getSyncStatus().syncSource).toBe('guidi');
+    setSyncSource('caixa');
+  });
+
+  it('rejects an unknown sync source', () => {
+    expect(() => setSyncSource('bogus' as never)).toThrow(/Unknown sync source/);
   });
 
   it('should preserve official prize fields and zero values', () => {
