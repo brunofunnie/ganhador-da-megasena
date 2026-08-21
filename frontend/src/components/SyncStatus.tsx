@@ -1,6 +1,9 @@
+import { useEffect, useState } from 'react';
 import { useStatus } from '../hooks/useStatus';
 import { useSync } from '../hooks/useSync';
+import { useSetSyncSource } from '../hooks/useSetSyncSource';
 import { AlertCircle, CheckCircle2, LoaderCircle, RefreshCw } from 'lucide-react';
+import type { SyncSource } from '../lib/api';
 
 interface SyncStatusProps {
   compact?: boolean;
@@ -9,6 +12,12 @@ interface SyncStatusProps {
 export function SyncStatus({ compact = false }: SyncStatusProps) {
   const { data, isLoading, isError } = useStatus();
   const sync = useSync();
+  const setSource = useSetSyncSource();
+  const [source, setSourceState] = useState<SyncSource>('caixa');
+
+  useEffect(() => {
+    if (data?.syncSource) setSourceState(data.syncSource);
+  }, [data?.syncSource]);
 
   if (isLoading) {
     return (
@@ -28,6 +37,11 @@ export function SyncStatus({ compact = false }: SyncStatusProps) {
     );
   }
 
+  function handleSourceChange(next: SyncSource) {
+    setSourceState(next);
+    setSource.mutate(next);
+  }
+
   return (
     <div className={`flex items-center gap-2 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-950 ${compact ? 'justify-between' : ''}`} role="status">
       {sync.isError ? (
@@ -41,9 +55,20 @@ export function SyncStatus({ compact = false }: SyncStatusProps) {
         {!compact && data?.lastSync && <span className="text-blue-700">Sincronizado: {new Date(data.lastSync).toLocaleString('pt-BR')}</span>}
         {sync.isError && <span className="text-red-700">Falha ao sincronizar.</span>}
       </div>
+      <select
+        value={source}
+        onChange={(e) => handleSourceChange(e.target.value as SyncSource)}
+        disabled={setSource.isPending}
+        aria-label="Fonte de sincronização"
+        title="Fonte de sincronização"
+        className="shrink-0 rounded border border-blue-200 bg-white px-1 py-0.5 text-xs text-blue-800 disabled:opacity-50"
+      >
+        <option value="caixa">Caixa API</option>
+        <option value="guidi">Guidi API</option>
+      </select>
       <button
         type="button"
-        onClick={() => sync.mutate()}
+        onClick={() => sync.mutate(source)}
         disabled={sync.isPending}
         title="Sincronizar agora"
         aria-label="Sincronizar agora"
