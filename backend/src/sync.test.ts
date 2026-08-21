@@ -117,6 +117,7 @@ describe('sync', () => {
   });
 
   it('syncResults(caixa) persists caixa as the last sync source', async () => {
+    setSyncSource('guidi');
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
       json: () => Promise.resolve(MOCK_RESULTS)
