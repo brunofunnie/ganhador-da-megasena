@@ -64,6 +64,31 @@ function asJson(value: unknown[] | undefined): string | null {
   return value === undefined ? null : JSON.stringify(value);
 }
 
+interface GuidiResult {
+  numero: number;
+  dataApuracao: string;
+  dataProximoConcurso?: string | null;
+  listaDezenas?: string[];
+  localSorteio?: string | null;
+  nomeMunicipioUFSorteio?: string | null;
+  indicadorConcursoEspecial?: number;
+  dezenasSorteadasOrdemSorteio?: string[];
+  listaRateioPremio?: Array<{
+    descricaoFaixa?: string | null;
+    faixa?: number;
+    numeroDeGanhadores?: number;
+    valorPremio?: number;
+  }>;
+  listaMunicipioUFGanhadores?: Array<{ uf?: string }>;
+  acumulado?: boolean;
+  numeroConcursoProximo?: number | null;
+  valorArrecadado?: number;
+  valorAcumuladoConcurso_0_5?: number;
+  valorAcumuladoConcursoEspecial?: number;
+  valorAcumuladoProximoConcurso?: number;
+  valorEstimadoProximoConcurso?: number;
+}
+
 function normalizeDraw(result: ApiResultado): StoredDraw {
   return {
     concurso: result.concurso,
@@ -77,6 +102,39 @@ function normalizeDraw(result: ApiResultado): StoredDraw {
     localGanhadores: asJson(result.localGanhadores),
     acumulou: result.acumulou === undefined ? null : Number(result.acumulou),
     proximoConcurso: result.proximoConcurso ?? null,
+    dataProximoConcurso: result.dataProximoConcurso ?? null,
+    valorArrecadado: result.valorArrecadado ?? null,
+    valorAcumuladoConcurso_0_5: result.valorAcumuladoConcurso_0_5 ?? null,
+    valorAcumuladoConcursoEspecial: result.valorAcumuladoConcursoEspecial ?? null,
+    valorAcumuladoProximoConcurso: result.valorAcumuladoProximoConcurso ?? null,
+    valorEstimadoProximoConcurso: result.valorEstimadoProximoConcurso ?? null
+  };
+}
+
+function normalizeGuidiDraw(result: GuidiResult): StoredDraw {
+  const premios = result.listaRateioPremio?.map((p) => ({
+    descricao: p.descricaoFaixa ?? '',
+    faixa: p.faixa ?? 0,
+    ganhadores: p.numeroDeGanhadores ?? 0,
+    valorPremio: p.valorPremio ?? 0,
+  }));
+  const ganhadores = result.listaMunicipioUFGanhadores ?? [];
+  const estados = ganhadores.length
+    ? [...new Set(ganhadores.map((g) => g.uf).filter((uf): uf is string => Boolean(uf)))]
+    : null;
+
+  return {
+    concurso: result.numero,
+    data: result.dataApuracao,
+    dezenas: JSON.stringify(result.listaDezenas ?? []),
+    local: result.localSorteio ?? result.nomeMunicipioUFSorteio ?? null,
+    concursoEspecial: result.indicadorConcursoEspecial === undefined ? null : Number(result.indicadorConcursoEspecial),
+    dezenasOrdemSorteio: asJson(result.dezenasSorteadasOrdemSorteio),
+    premiacoes: premios && premios.length ? JSON.stringify(premios) : null,
+    estadosPremiados: asJson(estados),
+    localGanhadores: asJson(ganhadores),
+    acumulou: result.acumulado === undefined ? null : Number(result.acumulado),
+    proximoConcurso: result.numeroConcursoProximo ?? null,
     dataProximoConcurso: result.dataProximoConcurso ?? null,
     valorArrecadado: result.valorArrecadado ?? null,
     valorAcumuladoConcurso_0_5: result.valorAcumuladoConcurso_0_5 ?? null,
@@ -150,9 +208,40 @@ async function caixaSync(): Promise<{ inserted: number; total: number }> {
   return persistDraws(results.map(normalizeDraw));
 }
 
-// TEMPORARY stub — replaced with the real implementation in the next task.
 async function guidISync(): Promise<{ inserted: number; total: number }> {
-  throw new Error('guidI sync not implemented yet');
+  const base = process.env.LOTERIA_GUIDI_BASE_URL || 'https://api.guidi.dev.br/loteria';
+
+  const ultimoResponse = await fetch(`${base}/megasena/ultimo`);
+  if (!ultimoResponse.ok) {
+    throw new Error(`Guidi API returned ${ultimoResponse.status}: ${ultimoResponse.statusText}`);
+  }
+  const ultimo: GuidiResult = await ultimoResponse.json();
+
+  const db = getDb();
+  const currentMaxRow = db.prepare('SELECT MAX(concurso) as max FROM draws').get() as { max: number | null };
+  const currentMax = currentMaxRow?.max ?? 0;
+
+  const draws: StoredDraw[] = [];
+  const ultimoNumero = ultimo.numero;
+
+  // Best-effort backfill of the gap above the newest draw (ultimo appended below).
+  for (let n = currentMax + 1; n < ultimoNumero; n++) {
+    try {
+      const res = await fetch(`${base}/megasena/${n}`);
+      if (res.ok) {
+        const dto: GuidiResult = await res.json();
+        if (typeof dto?.numero === 'number') draws.push(normalizeGuidiDraw(dto));
+      }
+    } catch {
+      // skip: a single missed draw must not abort the sync
+    }
+  }
+
+  if (typeof ultimoNumero === 'number' && ultimoNumero > 0) {
+    draws.push(normalizeGuidiDraw(ultimo));
+  }
+
+  return persistDraws(draws);
 }
 
 export async function syncResults(source: SyncSource = 'caixa'): Promise<{ inserted: number; total: number }> {

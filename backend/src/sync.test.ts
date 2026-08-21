@@ -196,3 +196,87 @@ describe('database compatibility', () => {
       .toEqual({ local: null, acumulou: null, premiacoes: null });
   });
 });
+
+describe('guidi sync', () => {
+  const GUIDI_DB_PATH = path.join(__dirname, '..', 'data', 'sync-guidi-test.db');
+
+  const ULTIMO = {
+    numero: 4,
+    dataApuracao: '22/01/2000',
+    dataProximoConcurso: '29/01/2000',
+    listaDezenas: ['19', '20', '21', '22', '23', '24'],
+    localSorteio: 'Espaço da Sorte, São Paulo, SP',
+    indicadorConcursoEspecial: 1,
+    dezenasSorteadasOrdemSorteio: ['24', '19', '22', '20', '23', '21'],
+    listaRateioPremio: [
+      { descricaoFaixa: 'Sena', faixa: 1, numeroDeGanhadores: 0, valorPremio: 0 },
+      { descricaoFaixa: 'Quina', faixa: 2, numeroDeGanhadores: 12, valorPremio: 3456.78 }
+    ],
+    listaMunicipioUFGanhadores: [{ ganhadores: 1, municipio: 'São Paulo', uf: 'SP' }],
+    acumulado: false,
+    numeroConcursoProximo: 5,
+    valorArrecadado: 123456.78,
+    valorAcumuladoConcurso_0_5: 10,
+    valorAcumuladoConcursoEspecial: 20,
+    valorAcumuladoProximoConcurso: 30,
+    valorEstimadoProximoConcurso: 40
+  };
+
+  const GAP = {
+    numero: 3,
+    dataApuracao: '15/01/2000',
+    listaDezenas: ['13', '14', '15', '16', '17', '18'],
+    localSorteio: 'Caixa, Rio de Janeiro, RJ',
+    acumulado: true,
+    numeroConcursoProximo: 4
+  };
+
+  beforeAll(() => {
+    if (fs.existsSync(GUIDI_DB_PATH)) fs.unlinkSync(GUIDI_DB_PATH);
+    initDb(GUIDI_DB_PATH);
+    // Seed one existing draw so the gap backfill only fetches #3 and #4.
+    getDb().prepare('INSERT INTO draws (concurso, data, dezenas) VALUES (?, ?, ?)')
+      .run(2, '08/01/2000', JSON.stringify(['07', '08', '09', '10', '11', '12']));
+  });
+
+  afterAll(() => {
+    closeDb();
+    if (fs.existsSync(GUIDI_DB_PATH)) fs.unlinkSync(GUIDI_DB_PATH);
+  });
+
+  it('incrementally appends from guidi, mapping fields correctly', async () => {
+    global.fetch = vi.fn().mockImplementation((url: string) => {
+      const u = String(url);
+      if (u.endsWith('/ultimo')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(ULTIMO) });
+      }
+      if (u.endsWith('/3')) return Promise.resolve({ ok: true, json: () => Promise.resolve(GAP) });
+      return Promise.resolve({ ok: false, status: 404, statusText: 'Not Found' });
+    });
+
+    const result = await syncResults('guidi');
+
+    expect(result.inserted).toBe(2);
+    expect(result.total).toBe(2);
+    expect(getSyncSource()).toBe('guidi');
+
+    const row3 = getDb().prepare('SELECT * FROM draws WHERE concurso = 3').get() as any;
+    expect(JSON.parse(row3.dezenas)).toEqual(['13', '14', '15', '16', '17', '18']);
+    expect(row3.acumulou).toBe(1);
+    expect(row3.proximo_concurso).toBe(4);
+
+    const row4 = getDb().prepare('SELECT * FROM draws WHERE concurso = 4').get() as any;
+    expect(JSON.parse(row4.dezenas)).toEqual(['19', '20', '21', '22', '23', '24']);
+    expect(JSON.parse(row4.dezenas_ordem_sorteio)).toEqual(['24', '19', '22', '20', '23', '21']);
+    expect(row4.concurso_especial).toBe(1);
+    expect(row4.local).toBe('Espaço da Sorte, São Paulo, SP');
+    expect(row4.data_proximo_concurso).toBe('29/01/2000');
+    expect(JSON.parse(row4.premiacoes)).toEqual([
+      { descricao: 'Sena', faixa: 1, ganhadores: 0, valorPremio: 0 },
+      { descricao: 'Quina', faixa: 2, ganhadores: 12, valorPremio: 3456.78 }
+    ]);
+    expect(JSON.parse(row4.estados_premiados)).toEqual(['SP']);
+    expect(JSON.parse(row4.local_ganhadores)).toEqual([{ ganhadores: 1, municipio: 'São Paulo', uf: 'SP' }]);
+    expect(row4.valor_estimado_proximo_concurso).toBe(40);
+  });
+});
