@@ -6,6 +6,8 @@ async function apiFetch<T>(path: string): Promise<T> {
   return res.json();
 }
 
+export type SyncSource = 'caixa' | 'guidi';
+
 export interface LatestDraw {
   concurso: number;
   data: string;
@@ -18,6 +20,7 @@ export interface StatusResponse {
   latestConcurso: number;
   latestDraw: LatestDraw | null;
   lastSync: string | null;
+  syncSource: SyncSource;
 }
 
 export interface FrequencyItem {
@@ -145,13 +148,25 @@ export function fetchStatus(): Promise<StatusResponse> {
 
 export interface SyncResponse {
   mensagem: string;
+  source: SyncSource;
   inserted: number;
   total: number;
 }
 
-export function triggerSync(): Promise<SyncResponse> {
-  return fetch(`${BASE}/sync`, { method: 'POST' }).then(async (res) => {
+export function triggerSync(source: SyncSource): Promise<SyncResponse> {
+  return fetch(`${BASE}/sync?source=${encodeURIComponent(source)}`, { method: 'POST' }).then(async (res) => {
     if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Erro ao sincronizar');
+    return res.json();
+  });
+}
+
+export function setSyncSource(source: SyncSource): Promise<{ syncSource: SyncSource }> {
+  return fetch(`${BASE}/sync-source`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ source }),
+  }).then(async (res) => {
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Erro ao salvar a fonte');
     return res.json();
   });
 }
