@@ -3,7 +3,7 @@
 #
 # The Cloudflare tunnel resolves the container by name on the shared network,
 # so the container name / alias MUST stay `loterias`
-# (ingress: loteria.funnie.dev -> http://loterias:3001).
+# (ingress: loterias.funnie.dev -> http://loterias:3001).
 #
 # LOTERIAS_DATA_DIR is a Dockhand *secret* env override, which Dockhand injects
 # into the compose shell at deploy time. It holds the host directory that stores

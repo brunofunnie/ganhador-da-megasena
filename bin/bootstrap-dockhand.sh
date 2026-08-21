@@ -123,4 +123,4 @@ echo "  ./bin/copy-db.sh      # seed $LOTERIAS_DATA_DIR with the local database"
 echo "  ./bin/deploy.sh       # push + sync + build + up"
 echo
 echo "Cloudflare tunnel ingress (dashboard, remote-managed tunnel):"
-echo "  loteria.funnie.dev -> http://loterias:3001"
+echo "  loterias.funnie.dev -> http://loterias:3001"

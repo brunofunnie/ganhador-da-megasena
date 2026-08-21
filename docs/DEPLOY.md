@@ -11,8 +11,8 @@ the VPS and builds the image there.
 | Repo | `git@github.com:brunofunnie/ganhador-da-megasena.git`, branch `main` |
 | Compose path | `compose.prod.yaml` |
 | Container / network alias | `loterias` on external network `jiban-shared` |
-| Public URL | https://loteria.funnie.dev |
-| Tunnel ingress | `loteria.funnie.dev` → `http://loterias:3001` |
+| Public URL | https://loterias.funnie.dev |
+| Tunnel ingress | `loterias.funnie.dev` → `http://loterias:3001` |
 
 ## Architecture
 
@@ -71,7 +71,7 @@ cp .env.example .env      # fill it in
 ```
 
 Then, in the Cloudflare dashboard (the tunnel is remote-managed via token, so
-there is no local ingress file), point `loteria.funnie.dev` at
+there is no local ingress file), point `loterias.funnie.dev` at
 `http://loterias:3001`.
 
 ## Notes

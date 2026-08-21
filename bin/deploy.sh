@@ -67,4 +67,4 @@ echo "  - sync"
 api POST "/api/git/stacks/$id/sync" '{}' | head -c 400; echo
 echo "  - deploy (build)"
 api POST "/api/git/stacks/$id/deploy" '{"pull":false,"build":true,"forceRecreate":true}' | head -c 800; echo
-echo "  ✓ done — https://loteria.funnie.dev"
+echo "  ✓ done — https://loterias.funnie.dev"
