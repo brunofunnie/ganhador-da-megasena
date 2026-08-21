@@ -60,8 +60,8 @@ type LatestDrawRow = {
   valor_estimado_proximo_concurso: number | null;
 };
 
-function asJson(value: unknown[] | undefined): string | null {
-  return value === undefined ? null : JSON.stringify(value);
+function asJson(value: unknown[] | null | undefined): string | null {
+  return value === undefined || value === null ? null : JSON.stringify(value);
 }
 
 interface GuidiResult {
