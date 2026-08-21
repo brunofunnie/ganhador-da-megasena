@@ -279,4 +279,32 @@ describe('guidi sync', () => {
     expect(JSON.parse(row4.local_ganhadores)).toEqual([{ ganhadores: 1, municipio: 'São Paulo', uf: 'SP' }]);
     expect(row4.valor_estimado_proximo_concurso).toBe(40);
   });
+
+  it('does not abort when a gap fetch 404s mid-sync', async () => {
+    // Reset to the seeded baseline (draw 2 only) so this test is deterministic
+    // regardless of the other test in this describe.
+    getDb().prepare('DELETE FROM draws WHERE concurso > 2').run();
+
+    const ultimoNumero5 = { ...ULTIMO, numero: 5 };
+
+    global.fetch = vi.fn().mockImplementation((url: string) => {
+      const u = String(url);
+      if (u.endsWith('/ultimo')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(ultimoNumero5) });
+      }
+      if (u.endsWith('/3')) return Promise.resolve({ ok: true, json: () => Promise.resolve(GAP) });
+      // /4 and anything else: treat as a miss (the gap backfill must skip it).
+      return Promise.resolve({ ok: false, status: 404, statusText: 'Not Found' });
+    });
+
+    const result = await syncResults('guidi');
+
+    expect(result.inserted).toBe(2);
+    expect(result.total).toBe(2);
+    expect(getSyncSource()).toBe('guidi');
+
+    const concursos = (getDb().prepare('SELECT concurso FROM draws ORDER BY concurso').all() as any[])
+      .map((r: any) => r.concurso);
+    expect(concursos).toEqual([2, 3, 5]);
+  });
 });
