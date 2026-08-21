@@ -115,6 +115,15 @@ describe('sync', () => {
     expect(row.valor_acumulado_proximo_concurso).toBe(30);
     expect(row.valor_estimado_proximo_concurso).toBe(40);
   });
+
+  it('syncResults(caixa) persists caixa as the last sync source', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(MOCK_RESULTS)
+    });
+    await syncResults('caixa');
+    expect(getSyncSource()).toBe('caixa');
+  });
 });
 
 describe('sync latest fallback', () => {

@@ -86,7 +86,45 @@ function normalizeDraw(result: ApiResultado): StoredDraw {
   };
 }
 
-export async function syncResults(): Promise<{ inserted: number; total: number }> {
+function persistDraws(draws: StoredDraw[]): { inserted: number; total: number } {
+  const db = getDb();
+
+  const insert = db.prepare(
+    `INSERT OR REPLACE INTO draws (
+      concurso, data, dezenas, local, concurso_especial, dezenas_ordem_sorteio,
+      premiacoes, estados_premiados, local_ganhadores, acumulou, proximo_concurso,
+      data_proximo_concurso, valor_arrecadado, valor_acumulado_concurso_0_5,
+      valor_acumulado_concurso_especial, valor_acumulado_proximo_concurso,
+      valor_estimado_proximo_concurso
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  );
+
+  const transaction = db.transaction(() => {
+    let inserted = 0;
+    for (const draw of draws) {
+      const existing = db.prepare('SELECT concurso FROM draws WHERE concurso = ?').get(draw.concurso);
+      if (!existing) inserted++;
+      insert.run(
+        draw.concurso, draw.data, draw.dezenas, draw.local, draw.concursoEspecial,
+        draw.dezenasOrdemSorteio, draw.premiacoes, draw.estadosPremiados,
+        draw.localGanhadores, draw.acumulou, draw.proximoConcurso,
+        draw.dataProximoConcurso, draw.valorArrecadado,
+        draw.valorAcumuladoConcurso_0_5, draw.valorAcumuladoConcursoEspecial,
+        draw.valorAcumuladoProximoConcurso, draw.valorEstimadoProximoConcurso
+      );
+    }
+    db.prepare('INSERT OR REPLACE INTO sync_meta (key, value) VALUES (?, ?)')
+      .run('last_sync', new Date().toISOString());
+    db.prepare('INSERT OR REPLACE INTO sync_meta (key, value) VALUES (?, ?)')
+      .run('total_draws', String(draws.length));
+    return inserted;
+  });
+
+  const inserted = transaction();
+  return { inserted, total: draws.length };
+}
+
+async function caixaSync(): Promise<{ inserted: number; total: number }> {
   const response = await fetch(`${API_BASE}/${LOTERIA}`);
 
   if (!response.ok) {
@@ -109,42 +147,21 @@ export async function syncResults(): Promise<{ inserted: number; total: number }
     // ignore: the full list already fetched successfully
   }
 
-  const db = getDb();
+  return persistDraws(results.map(normalizeDraw));
+}
 
-  const insert = db.prepare(
-    `INSERT OR REPLACE INTO draws (
-      concurso, data, dezenas, local, concurso_especial, dezenas_ordem_sorteio,
-      premiacoes, estados_premiados, local_ganhadores, acumulou, proximo_concurso,
-      data_proximo_concurso, valor_arrecadado, valor_acumulado_concurso_0_5,
-      valor_acumulado_concurso_especial, valor_acumulado_proximo_concurso,
-      valor_estimado_proximo_concurso
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  );
+// TEMPORARY stub — replaced with the real implementation in the next task.
+async function guidISync(): Promise<{ inserted: number; total: number }> {
+  throw new Error('guidI sync not implemented yet');
+}
 
-  const transaction = db.transaction(() => {
-    let inserted = 0;
-    for (const r of results) {
-      const existing = db.prepare('SELECT concurso FROM draws WHERE concurso = ?').get(r.concurso);
-      if (!existing) inserted++;
-      const draw = normalizeDraw(r);
-      insert.run(
-        draw.concurso, draw.data, draw.dezenas, draw.local, draw.concursoEspecial,
-        draw.dezenasOrdemSorteio, draw.premiacoes, draw.estadosPremiados,
-        draw.localGanhadores, draw.acumulou, draw.proximoConcurso,
-        draw.dataProximoConcurso, draw.valorArrecadado,
-        draw.valorAcumuladoConcurso_0_5, draw.valorAcumuladoConcursoEspecial,
-        draw.valorAcumuladoProximoConcurso, draw.valorEstimadoProximoConcurso
-      );
-    }
-    db.prepare('INSERT OR REPLACE INTO sync_meta (key, value) VALUES (?, ?)')
-      .run('last_sync', new Date().toISOString());
-    db.prepare('INSERT OR REPLACE INTO sync_meta (key, value) VALUES (?, ?)')
-      .run('total_draws', String(results.length));
-    return inserted;
-  });
-
-  const inserted = transaction();
-  return { inserted, total: results.length };
+export async function syncResults(source: SyncSource = 'caixa'): Promise<{ inserted: number; total: number }> {
+  if (!SYNC_SOURCES.includes(source)) {
+    throw new Error(`Unknown sync source: ${source}`);
+  }
+  const result = source === 'guidi' ? await guidISync() : await caixaSync();
+  setSyncSource(source);
+  return result;
 }
 
 export function getSyncStatus() {
