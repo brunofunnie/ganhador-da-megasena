@@ -88,7 +88,8 @@
 - Vitest (testes: **83 testes passando**)
 
 **Dados**
-- Sincronização automática com a **API pública da Caixa** (loteriascaixa-api) — resultados oficiais atualizados a cada inicialização
+- Sincronização automática com **duas fontes selecionáveis** — a **API pública da Caixa** (loteriascaixa-api) ou a **guidI loteria_api** — escolhidas no botão de sincronização e lembradas entre sessões
+- A fonte guidI é incremental (busca apenas os concursos novos) e pode ser apontada para uma instância própria via a variável `LOTERIA_GUIDI_BASE_URL`
 
 ---
 
