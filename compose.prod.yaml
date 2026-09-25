@@ -1,5 +1,5 @@
 # Production stack "loterias" — deployed by Dockhand as a git stack on the
-# "Jiban" environment (build-on-deploy). Nothing here is used for local dev.
+# "Bender" environment (build-on-deploy). Nothing here is used for local dev.
 #
 # The Cloudflare tunnel resolves the container by name on the shared network,
 # so the container name / alias MUST stay `loterias`
@@ -30,12 +30,12 @@ services:
       # Host directory holding megasena.db (+ its -wal/-shm files).
       - ${LOTERIAS_DATA_DIR:?set LOTERIAS_DATA_DIR as a Dockhand env override}:/data
     networks:
-      jiban-shared:
+      bender-network:
         aliases:
           - loterias
     labels:
       dev.funnie.loterias.role: app
 
 networks:
-  jiban-shared:
+  bender-network:
     external: true
