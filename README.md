@@ -127,7 +127,7 @@ Esse é o resultado esperado e é o principal valor da ferramenta: **mostrar com
 **Backend**
 - Node.js + Express 5 + TypeScript
 - better-sqlite3 (SQLite) — sem servidor de banco externo
-- Vitest — **136 testes**
+- Vitest — **139 testes**
 
 **Dados**
 - Sincronização automática com **duas fontes selecionáveis**: a **API pública da Caixa** (loteriascaixa-api) ou a **guidI loteria_api**, escolhidas no botão de sincronização e lembradas entre sessões.
@@ -192,7 +192,7 @@ cd frontend && npm run build
 ### Testes e qualidade
 
 ```bash
-cd backend && npm test        # 136 testes
+cd backend && npm test        # 139 testes
 cd backend && npx tsc --noEmit
 cd frontend && npm run lint
 cd frontend && npm run build
