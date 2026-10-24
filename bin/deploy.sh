@@ -19,7 +19,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
 set -a; [ -f "$ROOT/.env" ] && . "$ROOT/.env"; set +a
-DOCKHAND_URL="${DOCKHAND_URL:-http://jiban.lan:3000}"
+DOCKHAND_URL="${DOCKHAND_URL:-http://bender.lan:3000}"
 DOCKHAND_API="${DOCKHAND_API:-${DOCKHAND_API_TOKEN:-}}"
 : "${DOCKHAND_API:?DOCKHAND_API(_TOKEN) not set in .env}"
 

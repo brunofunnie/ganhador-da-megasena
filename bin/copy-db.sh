@@ -18,7 +18,7 @@ cd "$ROOT"
 
 set -a; [ -f "$ROOT/.env" ] && . "$ROOT/.env"; set +a
 VPS_USER="${VPS_USER:-bruno}"
-VPS_HOST="${VPS_HOST:-jiban.lan}"
+VPS_HOST="${VPS_HOST:-bender.lan}"
 : "${LOTERIAS_DATA_DIR:?LOTERIAS_DATA_DIR not set in .env}"
 
 SRC_DIR="$ROOT/backend/data"

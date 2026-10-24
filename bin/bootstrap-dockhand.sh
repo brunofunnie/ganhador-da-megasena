@@ -11,7 +11,7 @@
 #   1. Ensure the host data directory ($LOTERIAS_DATA_DIR) exists on the VPS.
 #   2. Ensure the VPS deploy public key is registered as a read-only deploy key
 #      on the GitHub repository (requires `gh` authenticated as the repo owner).
-#   3. Ensure a Dockhand SSH git credential named `jiban-deploy-key` exists.
+#   3. Ensure a Dockhand SSH git credential named `Bender Github` exists.
 #   4. Create the git stack `loterias` (branch main, compose.prod.yaml,
 #      buildOnDeploy) with LOTERIAS_DATA_DIR as a SECRET env override — secrets
 #      are injected into the compose shell at deploy time, which is what makes
@@ -26,18 +26,18 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
 set -a; [ -f "$ROOT/.env" ] && . "$ROOT/.env"; set +a
-DOCKHAND_URL="${DOCKHAND_URL:-http://jiban.lan:3000}"
+DOCKHAND_URL="${DOCKHAND_URL:-http://bender.lan:3000}"
 DOCKHAND_API="${DOCKHAND_API:-${DOCKHAND_API_TOKEN:-}}"
 ENV_ID="${DOCKHAND_ENV_ID:-1}"
 VPS_USER="${VPS_USER:-bruno}"
-VPS_HOST="${VPS_HOST:-jiban.lan}"
+VPS_HOST="${VPS_HOST:-bender.lan}"
 : "${DOCKHAND_API:?DOCKHAND_API(_TOKEN) not set in .env}"
 : "${LOTERIAS_DATA_DIR:?LOTERIAS_DATA_DIR not set in .env}"
 
 STACK_NAME="loterias"
 REPO_SLUG="brunofunnie/ganhador-da-megasena"
 REPO_SSH="git@github.com:${REPO_SLUG}.git"
-CRED_NAME="jiban-deploy-key"
+CRED_NAME="Bender Github"
 
 ssh_vps() { ssh -o BatchMode=yes "${VPS_USER}@${VPS_HOST}" "$@"; }
 api() { # METHOD PATH [JSON_BODY]
@@ -62,7 +62,7 @@ if gh api user/keys --jq '.[].key' | grep -qF "$PUBKEY_BLOB"; then
 elif gh api "repos/$REPO_SLUG/keys" --jq '.[].key' | grep -qF "$PUBKEY_BLOB"; then
     echo "    deploy key already present"
 else
-    gh api "repos/$REPO_SLUG/keys" -f "title=jiban-deploy-key" -f "key=$PUBKEY" -F read_only=true >/dev/null
+    gh api "repos/$REPO_SLUG/keys" -f "title=bender-deploy-key" -f "key=$PUBKEY" -F read_only=true >/dev/null
     echo "    deploy key added (read-only)"
 fi
 

@@ -1,16 +1,16 @@
 # Deploy — stack `loterias`
 
-Production runs on the home VPS (`jiban.lan` / `192.168.3.40`), managed by
+Production runs on the home VPS (`bender.lan` / `192.168.88.39`), managed by
 **Dockhand** (`fnsys/dockhand`) as a *git stack*: Dockhand clones this repo on
 the VPS and builds the image there.
 
 | | |
 |---|---|
 | Stack name | `loterias` |
-| Environment | `Jiban` (`environmentId: 1`) |
+| Environment | `Bender` (`environmentId: 1`) |
 | Repo | `git@github.com:brunofunnie/ganhador-da-megasena.git`, branch `main` |
 | Compose path | `compose.prod.yaml` |
-| Container / network alias | `loterias` on external network `jiban-shared` |
+| Container / network alias | `loterias` on external network `bender-network` |
 | Public URL | https://loterias.funnie.dev |
 | Tunnel ingress | `loterias.funnie.dev` → `http://loterias:3001` |
 
@@ -42,6 +42,14 @@ written to `.env.dockhand` on disk and would not be available for interpolation.
 Redeploys never touch the data directory. To (re)seed it from the local
 database, use `./bin/copy-db.sh` — it stops the container, copies
 `megasena.db`, `megasena.db-wal` and `megasena.db-shm`, then restarts it.
+
+## Host note
+
+The stack moved from `jiban` to `bender`. If `DOCKHAND_URL` still points to the
+old host (or the API answers `401`), generate a fresh API token in Dockhand
+(bender) under **Settings → API tokens** and update
+`DOCKHAND_API_TOKEN`/`DOCKHAND_URL` in `.env`. The token is per-instance: the
+old jiban token does not authenticate against the bender Dockhand.
 
 ## Local config
 
@@ -78,18 +86,18 @@ there is no local ingress file), point `loterias.funnie.dev` at
 
 - Dockhand git-stack create uses `stackName` (not `name`); `envVars` entries are
   `{key, value, isSecret}`.
-- The VPS SSH key (`~/.ssh/id_ed25519` on jiban, = Dockhand credential
-  `jiban-deploy-key`, id 2) is registered as an **account-level** GitHub SSH key,
+- The VPS SSH key (`~/.ssh/id_ed25519` on bender, = Dockhand credential
+  `Bender Github`, id 1) is registered as an **account-level** GitHub SSH key,
   so it already reaches this repo. GitHub refuses to accept a key that is
   already in use as a per-repo deploy key, which is why bootstrap skips that
   step instead of adding one.
 - A `502` on the public URL with the container healthy means the tunnel has no
   ingress rule for the hostname. Verify with:
-  `ssh bruno@jiban.lan 'docker logs cloudflared 2>&1 | grep -o "config=.*" | tail -1'`
+  `ssh bruno@bender.lan 'docker logs cloudflared 2>&1 | grep -o "config=.*" | tail -1'`
   and check reachability inside the network with:
-  `ssh bruno@jiban.lan 'docker run --rm --network jiban-shared loterias:latest \
+  `ssh bruno@bender.lan 'docker run --rm --network bender-network loterias:latest \
    node -e "fetch(\"http://loterias:3001/api/status\").then(r=>console.log(r.status))"'`
-- Dockhand copies the repo to `/app/data/stacks/Jiban/loterias` inside its own
+- Dockhand copies the repo to `/app/data/stacks/Bender/loterias` inside its own
   container and runs compose there against the host `docker.sock`; bind-mount
   sources are therefore resolved on the **host**.
 - The container runs as uid/gid `1000` (the `node` user), matching `bruno` on
