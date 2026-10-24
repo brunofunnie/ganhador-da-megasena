@@ -12,6 +12,8 @@ export interface WalletSummary {
 export interface WalletGame {
   id: number;
   dezenas: string[];
+  /** Generator mode that produced the game (`null` for manual/imported games). */
+  mode: string | null;
   createdAt: string;
 }
 
@@ -30,8 +32,14 @@ type WalletRow = {
 type GameRow = {
   id: number;
   dezenas: string;
+  mode: string | null;
   created_at: string;
 };
+
+function normalizeMode(mode: string | null | undefined): string | null {
+  const trimmed = typeof mode === 'string' ? mode.trim() : '';
+  return trimmed.length > 0 ? trimmed : null;
+}
 
 function hydrateWallet(row: WalletRow): Omit<WalletSummary, 'gameCount'> {
   return {
@@ -86,7 +94,7 @@ export function getWallet(id: number): WalletDetail | null {
   if (!row) return null;
 
   const gameRows = db.prepare(
-    'SELECT id, dezenas, created_at FROM wallet_games WHERE wallet_id = ? ORDER BY created_at ASC'
+    'SELECT id, dezenas, mode, created_at FROM wallet_games WHERE wallet_id = ? ORDER BY created_at ASC'
   ).all(id) as GameRow[];
 
   return {
@@ -94,6 +102,7 @@ export function getWallet(id: number): WalletDetail | null {
     games: gameRows.map(game => ({
       id: game.id,
       dezenas: JSON.parse(game.dezenas) as string[],
+      mode: game.mode ?? null,
       createdAt: game.created_at
     }))
   };
@@ -154,13 +163,18 @@ export function deleteWallet(id: number): void {
   if (result.changes === 0) throw new Error('Carteira não encontrada');
 }
 
-export function addGame(walletId: number, dezenas: string[]): WalletGame {
+export function addGame(
+  walletId: number,
+  dezenas: string[],
+  mode: string | null = null
+): WalletGame {
   const db = getDb();
   const wallet = getWallet(walletId);
   if (!wallet) throw new Error('Carteira não encontrada');
 
   const normalized = normalizeDezenas(dezenas);
   const normalizedJson = JSON.stringify(normalized);
+  const normalizedMode = normalizeMode(mode);
 
   const existing = db.prepare(
     'SELECT id FROM wallet_games WHERE wallet_id = ? AND dezenas = ?'
@@ -169,26 +183,29 @@ export function addGame(walletId: number, dezenas: string[]): WalletGame {
 
   const createdAt = new Date().toISOString();
   const result = db.prepare(
-    'INSERT INTO wallet_games (wallet_id, dezenas, created_at) VALUES (?, ?, ?)'
-  ).run(walletId, normalizedJson, createdAt);
+    'INSERT INTO wallet_games (wallet_id, dezenas, mode, created_at) VALUES (?, ?, ?, ?)'
+  ).run(walletId, normalizedJson, normalizedMode, createdAt);
 
   return {
     id: Number(result.lastInsertRowid),
     dezenas: normalized,
+    mode: normalizedMode,
     createdAt
   };
 }
 
 export function addGames(
   walletId: number,
-  games: string[][]
+  games: string[][],
+  mode: string | null = null
 ): { added: number; skipped: number } {
   const db = getDb();
   const wallet = getWallet(walletId);
   if (!wallet) throw new Error('Carteira não encontrada');
 
+  const normalizedMode = normalizeMode(mode);
   const insert = db.prepare(
-    'INSERT INTO wallet_games (wallet_id, dezenas, created_at) VALUES (?, ?, ?)'
+    'INSERT INTO wallet_games (wallet_id, dezenas, mode, created_at) VALUES (?, ?, ?, ?)'
   );
   const exists = db.prepare(
     'SELECT id FROM wallet_games WHERE wallet_id = ? AND dezenas = ?'
@@ -212,7 +229,7 @@ export function addGames(
         skipped++;
         continue;
       }
-      insert.run(walletId, normalizedJson, createdAt);
+      insert.run(walletId, normalizedJson, normalizedMode, createdAt);
       added++;
     }
   });

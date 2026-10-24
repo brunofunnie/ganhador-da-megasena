@@ -48,6 +48,12 @@ export const GENERATOR_MODES = [
 
 export type GeneratorMode = (typeof GENERATOR_MODES)[number];
 
+export function isGeneratorMode(value: unknown): value is GeneratorMode {
+  return (
+    typeof value === 'string' && (GENERATOR_MODES as readonly string[]).includes(value)
+  );
+}
+
 export interface GeneratorOptions {
   mode: GeneratorMode;
   count: number;

@@ -15,6 +15,7 @@ import { useWallet, useWallets } from '../hooks/useWallets';
 import { useStatus } from '../hooks/useStatus';
 import { useDraw } from '../hooks/useDraws';
 import { nextDrawName } from '../lib/utils';
+import { modeLabel, modeShortLabel } from '../lib/generatorModes';
 import { GameCard } from '../components/GameCard';
 
 function messageFrom(err: unknown): string {
@@ -613,11 +614,12 @@ function WalletDetailView({ id, onBack, onRemoved }: { id: number; onBack: () =>
         </p>
       ) : viewMode === 'table' ? (
         <div className="overflow-x-auto rounded-xl border border-slate-200">
-          <table className="min-w-[560px] w-full text-sm">
+          <table className="min-w-[660px] w-full text-sm">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs font-bold uppercase tracking-wide text-slate-500">
                 <th scope="col" className="px-3 py-2">#</th>
                 <th scope="col" className="px-3 py-2">Jogo</th>
+                <th scope="col" className="px-3 py-2">Modo</th>
                 {checkDraw && <th scope="col" className="px-3 py-2 text-center">Acertos ({checkConcurso})</th>}
                 <th scope="col" className="px-3 py-2 text-right">Ações</th>
               </tr>
@@ -643,6 +645,18 @@ function WalletDetailView({ id, onBack, onRemoved }: { id: number; onBack: () =>
                               </span>
                             ))}
                           </div>
+                        </td>
+                        <td className="px-3 py-2">
+                          <span
+                            className={`inline-block rounded-md px-2 py-0.5 text-xs font-bold ${
+                              game.mode
+                                ? 'bg-blue-50 text-blue-800'
+                                : 'bg-slate-100 text-slate-500'
+                            }`}
+                            title={modeLabel(game.mode)}
+                          >
+                            {modeShortLabel(game.mode)}
+                          </span>
                         </td>
                         {checkDraw && (
                           <td className="px-3 py-2 text-center font-mono font-bold text-blue-700">{hits}</td>
@@ -675,6 +689,8 @@ function WalletDetailView({ id, onBack, onRemoved }: { id: number; onBack: () =>
                   index={index}
                   ballSize="sm"
                   drawnNumbers={checkDraw ? drawnNumbers : undefined}
+                  badge={modeShortLabel(game.mode)}
+                  badgeTitle={modeLabel(game.mode)}
                   onRemove={() => setConfirmRemoveGame(game)}
                 />
               ))}

@@ -361,6 +361,8 @@ export interface WalletSummary {
 export interface WalletGame {
   id: number;
   dezenas: string[];
+  /** Generator mode that produced the game; `null` for manual/imported games. */
+  mode: string | null;
   createdAt: string;
 }
 
@@ -413,22 +415,30 @@ export function deleteWallet(id: number): Promise<void> {
   });
 }
 
-export function addGameToWallet(id: number, dezenas: string[]): Promise<WalletGame> {
+export function addGameToWallet(
+  id: number,
+  dezenas: string[],
+  mode?: string | null
+): Promise<WalletGame> {
   return fetch(`${BASE}/wallets/${id}/games`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ dezenas }),
+    body: JSON.stringify({ dezenas, ...(mode ? { mode } : {}) }),
   }).then(async (res) => {
     if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Erro ao adicionar jogo');
     return res.json();
   });
 }
 
-export function importGamesToWallet(id: number, jogos: string[][]): Promise<{ added: number; skipped: number }> {
+export function importGamesToWallet(
+  id: number,
+  jogos: string[][],
+  mode?: string | null
+): Promise<{ added: number; skipped: number }> {
   return fetch(`${BASE}/wallets/${id}/games/batch`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ jogos }),
+    body: JSON.stringify({ jogos, ...(mode ? { mode } : {}) }),
   }).then(async (res) => {
     if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Erro ao importar jogos');
     return res.json();

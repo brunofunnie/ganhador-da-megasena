@@ -58,6 +58,7 @@ CREATE TABLE IF NOT EXISTS wallet_games (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   wallet_id INTEGER NOT NULL REFERENCES wallets(id) ON DELETE CASCADE,
   dezenas TEXT NOT NULL,
+  mode TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 `;
@@ -95,6 +96,17 @@ export function initDb(dbPath?: string): void {
   );
   for (const [name, type] of DRAW_METADATA_COLUMNS) {
     if (!columns.has(name)) db.exec(`ALTER TABLE draws ADD COLUMN ${name} ${type}`);
+  }
+
+  // Wallet games gained the generator mode that produced them. Older databases
+  // get the column added in place; existing rows keep NULL (shown as "Manual").
+  const walletGameColumns = new Set(
+    (db.prepare('PRAGMA table_info(wallet_games)').all() as Array<{ name: string }>).map(
+      (column) => column.name
+    )
+  );
+  if (!walletGameColumns.has('mode')) {
+    db.exec('ALTER TABLE wallet_games ADD COLUMN mode TEXT');
   }
 }
 

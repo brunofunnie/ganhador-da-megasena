@@ -18,22 +18,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useWallets } from '../hooks/useWallets';
 import { useStatus } from '../hooks/useStatus';
 import { nextDrawName } from '../lib/utils';
-
-const MODES = [
-  { value: 'statistical', label: 'Estatístico (features reais)' },
-  { value: 'random', label: 'Aleatório Puro' },
-  { value: 'hot', label: 'Quentes (z-score de frequência)' },
-  { value: 'cold', label: 'Frios (atraso geométrico)' },
-  { value: 'balanced', label: 'Balanceado (3P-3I)' },
-  { value: 'genetic', label: 'Genético (algoritmo evolutivo)' },
-  { value: 'sequences', label: 'Sequências (Primos/Fibonacci)' },
-  { value: 'fechamento', label: 'Fechamento (cobertura com garantia)' },
-  { value: 'dreams', label: 'Sonhos (com seed)' },
-  { value: 'trend', label: 'Tendência Temporal (z assinado)' },
-  { value: 'monte-carlo', label: 'Monte Carlo (busca de portfólio)' },
-  { value: 'ensemble', label: 'Ensemble (voto ponderado)' },
-  { value: 'markov', label: 'Markov (transição temporal)' },
-];
+import { GENERATOR_MODES as MODES, modeLabel } from '../lib/generatorModes';
 
 const ALL_STRATEGIES = ['top6', 'cold6', 'balanced-3p3i', 'quadrants', 'full-cycle', 'sum-target', 'primes-power', 'avg-frequency', 'feature-conditioned'] as const;
 const DEFAULT_STRATEGIES = ['top6', 'cold6', 'balanced-3p3i', 'quadrants', 'primes-power', 'avg-frequency', 'feature-conditioned'];
@@ -171,6 +156,7 @@ export function Gerador() {
   }, [results, handleSimulateGame]);
 
   const [saveTarget, setSaveTarget] = useState<string[] | null>(null);
+  const [saveMode, setSaveMode] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [newWalletName, setNewWalletName] = useState('');
   const [saving, setSaving] = useState(false);
@@ -186,15 +172,18 @@ export function Gerador() {
   const handleSaveGame = useCallback((numbers: string[]) => {
     if (saveCloseTimer.current !== null) clearTimeout(saveCloseTimer.current);
     setSaveTarget(numbers);
+    // The game came from the last generated batch, so that is its real mode.
+    setSaveMode(results?.modo ?? mode);
     setSaveError(null);
     setJustSaved(false);
     setNewWalletName(nextDrawName(status?.latestDraw?.proximoConcurso ?? null) ?? '');
-  }, [status]);
+  }, [status, results, mode]);
 
   const closeAfterSave = useCallback(() => {
     setJustSaved(true);
     saveCloseTimer.current = setTimeout(() => {
       setSaveTarget(null);
+      setSaveMode(null);
       setJustSaved(false);
     }, 800);
   }, []);
@@ -205,7 +194,7 @@ export function Gerador() {
       setSaving(true);
       setSaveError(null);
       try {
-        await addGameToWallet(walletId, saveTarget);
+        await addGameToWallet(walletId, saveTarget, saveMode);
         closeAfterSave();
         await queryClient.invalidateQueries({ queryKey: ['wallets'] });
       } catch (err) {
@@ -215,7 +204,7 @@ export function Gerador() {
         setSaving(false);
       }
     },
-    [saveTarget, queryClient, closeAfterSave],
+    [saveTarget, saveMode, queryClient, closeAfterSave],
   );
 
   const createAndSave = useCallback(async () => {
@@ -224,7 +213,7 @@ export function Gerador() {
     setSaveError(null);
     try {
       const wallet = await createWallet(newWalletName.trim());
-      await addGameToWallet(wallet.id, saveTarget);
+      await addGameToWallet(wallet.id, saveTarget, saveMode);
       closeAfterSave();
       setNewWalletName('');
       await queryClient.invalidateQueries({ queryKey: ['wallets'] });
@@ -234,7 +223,7 @@ export function Gerador() {
     } finally {
       setSaving(false);
     }
-  }, [saveTarget, newWalletName, queryClient, closeAfterSave]);
+  }, [saveTarget, saveMode, newWalletName, queryClient, closeAfterSave]);
 
   return (
     <div className="space-y-6 text-slate-800">
@@ -689,6 +678,10 @@ export function Gerador() {
               </div>
               <p className="mt-1 text-sm text-slate-500">
                 <span className="font-mono font-semibold text-slate-700">{saveTarget?.join(',')}</span>
+              </p>
+              <p className="mt-1 text-xs text-slate-500">
+                Modo:{' '}
+                <span className="font-semibold text-slate-700">{modeLabel(saveMode)}</span>
               </p>
 
               {saving && (

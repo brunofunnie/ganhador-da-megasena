@@ -195,6 +195,43 @@ describe('wallet domain services', () => {
     expect(getWallet(wallet.id)?.name).toBe('nome');
   });
 
+  it('stores the generator mode of each game', () => {
+    const wallet = createWallet('Modos');
+    const generated = addGame(wallet.id, ['01', '02', '03', '04', '05', '06'], 'statistical');
+    const manual = addGame(wallet.id, ['10', '20', '30', '40', '50', '60']);
+
+    expect(generated.mode).toBe('statistical');
+    expect(manual.mode).toBeNull();
+
+    const games = getWallet(wallet.id)?.games ?? [];
+    const modes = new Map(games.map((game) => [game.dezenas.join(','), game.mode]));
+    expect(modes.get('01,02,03,04,05,06')).toBe('statistical');
+    expect(modes.get('10,20,30,40,50,60')).toBeNull();
+  });
+
+  it('applies a mode to all games of a batch import', () => {
+    const wallet = createWallet('Lote');
+    addGames(
+      wallet.id,
+      [
+        ['01', '02', '03', '04', '05', '06'],
+        ['10', '20', '30', '40', '50', '60'],
+      ],
+      'hot'
+    );
+
+    const games = getWallet(wallet.id)?.games ?? [];
+    expect(games).toHaveLength(2);
+    expect(games.every((game) => game.mode === 'hot')).toBe(true);
+  });
+
+  it('has the mode column on wallet_games (migration)', () => {
+    const columns = getDb().prepare('PRAGMA table_info(wallet_games)').all() as Array<{
+      name: string;
+    }>;
+    expect(columns.map((column) => column.name)).toContain('mode');
+  });
+
   it('adds multiple games at once skipping duplicates and invalid lines', () => {
     const wallet = createWallet('Carteira');
     addGame(wallet.id, ['01', '02', '03', '04', '05', '06']);

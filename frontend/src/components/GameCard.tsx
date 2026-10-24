@@ -9,9 +9,21 @@ interface GameCardProps {
   onRemove?: (numbers: string[]) => void;
   drawnNumbers?: string[];
   ballSize?: 'sm' | 'md';
+  /** Optional compact label (e.g. the generator mode of a saved game). */
+  badge?: string;
+  badgeTitle?: string;
 }
 
-export function GameCard({ numbers, index, onSimulate, onRemove, drawnNumbers, ballSize = 'md' }: GameCardProps) {
+export function GameCard({
+  numbers,
+  index,
+  onSimulate,
+  onRemove,
+  drawnNumbers,
+  ballSize = 'md',
+  badge,
+  badgeTitle,
+}: GameCardProps) {
   const [copied, setCopied] = useState(false);
   const drawnSet = drawnNumbers ? new Set(drawnNumbers) : null;
 
@@ -24,13 +36,21 @@ export function GameCard({ numbers, index, onSimulate, onRemove, drawnNumbers, b
   return (
     <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="flex items-center justify-between">
-        {index !== undefined ? (
-          <span className="rounded-md bg-blue-50 px-2 py-1 text-xs font-bold text-blue-800">
-            Jogo {index + 1}
-          </span>
-        ) : (
-          <span />
-        )}
+        <div className="flex flex-wrap items-center gap-2">
+          {index !== undefined && (
+            <span className="rounded-md bg-blue-50 px-2 py-1 text-xs font-bold text-blue-800">
+              Jogo {index + 1}
+            </span>
+          )}
+          {badge && (
+            <span
+              className="rounded-md bg-slate-100 px-2 py-1 text-xs font-bold text-slate-600"
+              title={badgeTitle}
+            >
+              {badge}
+            </span>
+          )}
+        </div>
         <div className="flex items-center gap-2">
           {onSimulate && (
             <button

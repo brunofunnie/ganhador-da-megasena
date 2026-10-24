@@ -10,6 +10,7 @@ import {
   removeGame,
   updateWallet
 } from '../wallets';
+import { isGeneratorMode } from '../generators';
 
 const router = Router();
 
@@ -17,6 +18,17 @@ function parseId(value: unknown): number | null {
   if (typeof value !== 'string' || !/^\d+$/.test(value)) return null;
   const parsed = Number(value);
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
+/** `null` means a manual/imported game; invalid values are rejected. */
+function parseMode(value: unknown): { valid: boolean; mode: string | null } {
+  if (value === undefined || value === null || value === '') {
+    return { valid: true, mode: null };
+  }
+  if (typeof value === 'string' && isGeneratorMode(value)) {
+    return { valid: true, mode: value };
+  }
+  return { valid: false, mode: null };
 }
 
 router.get('/wallets', (_req: Request, res: Response) => {
@@ -123,7 +135,12 @@ router.post('/wallets/:id/games', (req: Request, res: Response) => {
       res.status(400).json({ error: message });
       return;
     }
-    const game = addGame(id, normalized);
+    const parsedMode = parseMode(req.body?.mode);
+    if (!parsedMode.valid) {
+      res.status(400).json({ error: 'Modo de geração inválido' });
+      return;
+    }
+    const game = addGame(id, normalized, parsedMode.mode);
     res.status(201).json(game);
   } catch (err) {
     const message = err instanceof Error ? err.message : '';
@@ -151,7 +168,12 @@ router.post('/wallets/:id/games/batch', (req: Request, res: Response) => {
       res.status(400).json({ error: 'Nenhum jogo para importar' });
       return;
     }
-    const result = addGames(id, games);
+    const parsedMode = parseMode(req.body?.mode);
+    if (!parsedMode.valid) {
+      res.status(400).json({ error: 'Modo de geração inválido' });
+      return;
+    }
+    const result = addGames(id, games, parsedMode.mode);
     res.status(201).json(result);
   } catch (err) {
     const message = err instanceof Error ? err.message : '';

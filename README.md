@@ -83,6 +83,7 @@ Esse é o resultado esperado e é o principal valor da ferramenta: **mostrar com
 ### 👛 Carteiras de apostas
 
 - Guarde grupos de jogos em **carteiras nomeadas** (ex.: "Mega da Virada", "Aposta do mês").
+- Cada jogo guarda o **modo de geração** que o produziu (badge na tabela e nos cards; jogos importados manualmente aparecem como **Manual**).
 - **Finalize** uma carteira como rótulo de organização — e continue adicionando jogos depois.
 - Visualize em **tabela compacta** (padrão) ou **cards** selecionáveis.
 - **Cheque seus jogos com o sorteio atual** — os números acertados ficam destacados em amarelo.
@@ -221,7 +222,7 @@ Tudo sob `/api`:
 | `GET` | `/draws/:concurso/analysis` | Análise comparativa de um concurso |
 | `GET/POST` | `/wallets` | Lista/cria carteiras |
 | `GET/PATCH/DELETE` | `/wallets/:id` | Obtém/atualiza/exclui carteira |
-| `POST` | `/wallets/:id/games` | Adiciona jogo (rejeita duplicados) |
+| `POST` | `/wallets/:id/games` | Adiciona jogo (rejeita duplicados; aceita `mode`) |
 | `DELETE` | `/wallets/:id/games/:gameId` | Remove um jogo |
 
 ### Parâmetros de `/generate`
