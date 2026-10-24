@@ -1,47 +1,27 @@
-import { getDb } from './db';
+import { DrawDataset, getDataset } from './dataset';
+import { TrendStat, buildTrendModel } from './statistical';
 
-export function getTemporalTrend(windowSize: number = 50): Map<string, number> {
-  const db = getDb();
-  const draws = db.prepare('SELECT concurso, dezenas FROM draws ORDER BY concurso ASC').all() as {
-    concurso: number;
-    dezenas: string;
-  }[];
-
-  const totalConcursos = draws.length;
-  if (totalConcursos === 0) {
-    const map = new Map<string, number>();
-    for (let i = 1; i <= 60; i++) map.set(i.toString().padStart(2, '0'), 0);
-    return map;
-  }
-
-  const recentWindow = Math.min(windowSize, totalConcursos);
-  const recentDraws = draws.slice(-recentWindow);
-
-  const totalFreq = new Map<string, number>();
-  const recentFreq = new Map<string, number>();
-  for (let i = 1; i <= 60; i++) {
-    const key = i.toString().padStart(2, '0');
-    totalFreq.set(key, 0);
-    recentFreq.set(key, 0);
-  }
-
-  for (const d of draws) {
-    const dezenas: string[] = JSON.parse(d.dezenas);
-    for (const n of dezenas) totalFreq.set(n, (totalFreq.get(n) || 0) + 1);
-  }
-
-  for (const d of recentDraws) {
-    const dezenas: string[] = JSON.parse(d.dezenas);
-    for (const n of dezenas) recentFreq.set(n, (recentFreq.get(n) || 0) + 1);
-  }
-
+/**
+ * Temporal trend: signed z-score of (recent inclusion rate − historical rate).
+ *
+ * The sign matters — a number that is heating up must not get the same weight
+ * as one that is cooling down (the previous implementation used Math.abs()).
+ */
+export function getTemporalTrend(
+  windowSize: number = 50,
+  dataset: DrawDataset = getDataset()
+): Map<string, number> {
+  const model = buildTrendModel(dataset, windowSize);
   const scores = new Map<string, number>();
-  for (let i = 1; i <= 60; i++) {
-    const key = i.toString().padStart(2, '0');
-    const recentRate = recentFreq.get(key)! / recentWindow;
-    const totalRate = totalFreq.get(key)! / totalConcursos;
-    scores.set(key, parseFloat((recentRate - totalRate).toFixed(4)));
+  for (const [numero, stat] of model) {
+    scores.set(numero, parseFloat(stat.z.toFixed(4)));
   }
-
   return scores;
+}
+
+export function getTrendDetails(
+  windowSize: number = 50,
+  dataset: DrawDataset = getDataset()
+): Map<string, TrendStat> {
+  return buildTrendModel(dataset, windowSize);
 }

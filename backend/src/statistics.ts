@@ -1,15 +1,28 @@
-import { getDb } from './db';
+import { DrawDataset, TOTAL_NUMBERS, formatNumber, getDataset } from './dataset';
+import {
+  SignificanceSummary,
+  buildFrequencyModel,
+  summarizeSignificance,
+} from './statistical';
 
 export interface FrequencyItem {
   numero: string;
   frequencia: number;
   porcentagem: number;
+  /** (frequência − esperado) / desvio-padrão. |z| < 2 é ruído amostral. */
+  zScore: number;
+  /** Taxa suavizada (empirical Bayes) em torno de 10%. */
+  taxaSuavizada: number;
 }
 
 export interface ColdNumberItem {
   numero: string;
   ultimoConcurso: number | null;
   concursosAtrasado: number;
+  /** (atraso − 10) / 9,49 — o atraso é geométrico, não linear. */
+  atrasoZ: number;
+  /** P(atraso ≥ observado) sob o modelo geométrico. */
+  probabilidadeAtraso: number;
 }
 
 export interface Statistics {
@@ -19,6 +32,7 @@ export interface Statistics {
   parity: {
     evenOddDistribution: Record<string, number>;
   };
+  significance: SignificanceSummary;
 }
 
 export interface NumberGapIntervals {
@@ -32,115 +46,85 @@ export interface GapIntervals {
   numeros: NumberGapIntervals[];
 }
 
-export function computeGapIntervals(windowSize: number): GapIntervals {
-  const db = getDb();
-  const draws = db.prepare('SELECT concurso, dezenas FROM draws ORDER BY concurso DESC').all() as {
-    concurso: number;
-    dezenas: string;
-  }[];
-
-  const windowed = draws.slice(0, Math.max(1, Math.min(windowSize, draws.length)));
-  const latestConcurso = draws.length > 0 ? draws[0].concurso : 0;
-
-  // Last concurso where each number appeared, across ALL history (for gapAtual)
-  const allLastSeen = new Map<string, number>();
+export function computeGapIntervals(
+  windowSize: number,
+  dataset: DrawDataset = getDataset()
+): GapIntervals {
+  const all = dataset.draws;
+  const windowed = all.slice(Math.max(0, all.length - Math.max(1, windowSize)));
+  const latestConcurso = all.length > 0 ? all[all.length - 1].concurso : 0;
 
   const numeros: NumberGapIntervals[] = [];
-  for (let i = 1; i <= 60; i++) {
-    const key = i.toString().padStart(2, '0');
+  for (let i = 1; i <= TOTAL_NUMBERS; i++) {
+    const numero = formatNumber(i);
     const intervalos: number[] = [];
     let lastSeen: number | null = null;
 
+    // Oldest → newest, then reversed: the UI shows the most recent gap first.
     for (const draw of windowed) {
-      const dezenas: string[] = JSON.parse(draw.dezenas);
-      if (dezenas.includes(key)) {
-        if (lastSeen !== null) {
-          intervalos.push(lastSeen - draw.concurso);
-        }
+      if (draw.numbers.includes(numero)) {
+        if (lastSeen !== null) intervalos.push(draw.concurso - lastSeen);
         lastSeen = draw.concurso;
       }
     }
+    intervalos.reverse();
 
-    if (!allLastSeen.has(key)) {
-      for (const draw of draws) {
-        const dezenas: string[] = JSON.parse(draw.dezenas);
-        if (dezenas.includes(key)) {
-          allLastSeen.set(key, draw.concurso);
-          break;
-        }
+    let lastAppearance: number | null = null;
+    for (let d = all.length - 1; d >= 0; d--) {
+      if (all[d].numbers.includes(numero)) {
+        lastAppearance = all[d].concurso;
+        break;
       }
     }
 
-    const lastAppearance = allLastSeen.get(key);
-    const gapAtual = lastAppearance === undefined ? (latestConcurso > 0 ? draws.length : 0) : latestConcurso - lastAppearance;
+    const gapAtual =
+      lastAppearance === null
+        ? all.length
+        : latestConcurso - lastAppearance;
 
-    numeros.push({ numero: key, intervalos, gapAtual });
+    numeros.push({ numero, intervalos, gapAtual });
   }
 
   return { totalConcursos: windowed.length, numeros };
 }
 
-export function computeStatistics(): Statistics {
-  const db = getDb();
-  const draws = db.prepare('SELECT concurso, dezenas FROM draws ORDER BY concurso ASC').all() as {
-    concurso: number;
-    dezenas: string;
-  }[];
-
-  const totalConcursos = draws.length;
-  const maxConcurso = draws.length > 0 ? draws[draws.length - 1].concurso : 0;
-
-  const frequencyMap = new Map<string, number>();
-  const lastSeen = new Map<string, number>();
-
-  for (let i = 1; i <= 60; i++) {
-    const key = i.toString().padStart(2, '0');
-    frequencyMap.set(key, 0);
-    lastSeen.set(key, -1);
-  }
+export function computeStatistics(dataset: DrawDataset = getDataset()): Statistics {
+  const model = buildFrequencyModel(dataset);
+  const total = model.total;
 
   const parityCounts: Record<string, number> = {};
-
-  for (const draw of draws) {
-    const dezenas: string[] = JSON.parse(draw.dezenas);
-
+  for (const draw of dataset.draws) {
     let evens = 0;
-    for (const d of dezenas) {
-      frequencyMap.set(d, (frequencyMap.get(d) || 0) + 1);
-      lastSeen.set(d, draw.concurso);
-      if (parseInt(d) % 2 === 0) evens++;
+    for (const numero of draw.numbers) {
+      if (parseInt(numero, 10) % 2 === 0) evens++;
     }
     const odds = 6 - evens;
     const key = `${evens}p-${odds}i`;
     parityCounts[key] = (parityCounts[key] || 0) + 1;
   }
 
-  const frequency: FrequencyItem[] = [];
-  for (let i = 1; i <= 60; i++) {
-    const key = i.toString().padStart(2, '0');
-    const freq = frequencyMap.get(key) || 0;
-    frequency.push({
-      numero: key,
-      frequencia: freq,
-      porcentagem: totalConcursos > 0 ? parseFloat(((freq / totalConcursos) * 100).toFixed(2)) : 0
-    });
-  }
+  // byFrequency is already sorted desc; ensure porcentagem uses the draw total.
+  const frequency: FrequencyItem[] = model.byFrequency.map((stat) => ({
+    numero: stat.numero,
+    frequencia: stat.count,
+    porcentagem: total > 0 ? parseFloat(((stat.count / total) * 100).toFixed(2)) : 0,
+    zScore: parseFloat(stat.z.toFixed(2)),
+    taxaSuavizada: parseFloat((stat.shrunkRate * 100).toFixed(2)),
+  }));
 
-  const coldNumbers: ColdNumberItem[] = [];
-  for (let i = 1; i <= 60; i++) {
-    const key = i.toString().padStart(2, '0');
-    const last = lastSeen.get(key) ?? -1;
-    coldNumbers.push({
-      numero: key,
-      ultimoConcurso: last === -1 ? null : last,
-      concursosAtrasado: last === -1 ? totalConcursos : maxConcurso - last
-    });
-  }
+  const coldNumbers: ColdNumberItem[] = model.byGap.map((stat) => ({
+    numero: stat.numero,
+    ultimoConcurso: stat.lastConcurso,
+    concursosAtrasado: stat.gap,
+    atrasoZ: parseFloat(stat.gapZ.toFixed(2)),
+    probabilidadeAtraso: parseFloat(stat.survival.toFixed(4)),
+  }));
 
   return {
-    totalConcursos,
-    frequency: frequency.sort((a, b) => b.frequencia - a.frequencia),
-    coldNumbers: coldNumbers.sort((a, b) => b.concursosAtrasado - a.concursosAtrasado),
-    parity: { evenOddDistribution: parityCounts }
+    totalConcursos: total,
+    frequency,
+    coldNumbers,
+    parity: { evenOddDistribution: parityCounts },
+    significance: summarizeSignificance(model),
   };
 }

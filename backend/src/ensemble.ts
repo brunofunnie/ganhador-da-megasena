@@ -1,41 +1,55 @@
+import { DrawDataset, getDataset } from './dataset';
+import { createRng, Rng } from './rng';
 import { executeStrategy } from './strategies';
+import { generatePortfolio, normalizeVotes } from './portfolio';
 
+/**
+ * Soft-voting ensemble.
+ *
+ * Every selected strategy contributes all of its tickets (normalized by the
+ * number of tickets, so `full-cycle` does not dominate), producing a number
+ * prior. The final tickets are sampled by the feature-conditioned engine with
+ * that prior and the usual diversity/popularity constraints — instead of just
+ * copying the first ticket of each strategy, which used to collapse into the
+ * same hot-number game every time.
+ */
 export function runEnsemble(options: {
   strategyIds: string[];
   count: number;
+  dataset?: DrawDataset;
+  rng?: Rng;
+  seed?: string;
+  fixedNumbers?: string[];
+  excludeNumbers?: string[];
 }): string[][] {
   const { strategyIds, count } = options;
-
   if (strategyIds.length === 0) {
     throw new Error('Ensemble requires at least one strategy');
   }
 
-  const voteMap = new Map<string, number>();
+  const dataset = options.dataset ?? getDataset();
+  const rng = options.rng ?? createRng(options.seed);
 
+  const votes = new Map<string, number>();
   for (const id of strategyIds) {
-    const result = executeStrategy(id);
-    const game = result.jogos[0];
-    for (const num of game) {
-      voteMap.set(num, (voteMap.get(num) || 0) + 1);
+    const result = executeStrategy(id, { dataset, rng });
+    const contribution = 1 / Math.max(1, result.jogos.length);
+    for (const game of result.jogos) {
+      for (const numero of game) {
+        votes.set(numero, (votes.get(numero) ?? 0) + contribution);
+      }
     }
   }
 
-  const sorted = Array.from(voteMap.entries())
-    .sort((a, b) => b[1] - a[1] || parseInt(a[0]) - parseInt(b[0]));
+  const priorWeights = normalizeVotes(votes, 1.0);
 
-  const games: string[][] = [];
-  const usedGlobal = new Set<string>();
-  for (let g = 0; g < count; g++) {
-    let available = sorted.filter(e => !usedGlobal.has(e[0]));
-    if (available.length < 6) available = sorted;
-    const game = available.slice(0, 6).map(e => e[0]);
-    if (game.length < 6) {
-      const remaining = sorted.filter(e => !game.includes(e[0])).map(e => e[0]);
-      game.push(...remaining.slice(0, 6 - game.length));
-    }
-    for (const n of game) usedGlobal.add(n);
-    games.push(game.sort((a, b) => parseInt(a) - parseInt(b)));
-  }
-
-  return games;
+  return generatePortfolio({
+    dataset,
+    count,
+    rng,
+    priorWeights,
+    fixedNumbers: options.fixedNumbers,
+    excludeNumbers: options.excludeNumbers,
+    candidatesPerGame: 400,
+  }).games;
 }

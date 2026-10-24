@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useStatus } from '../hooks/useStatus';
 import { useSync } from '../hooks/useSync';
 import { useSetSyncSource } from '../hooks/useSetSyncSource';
@@ -13,11 +13,10 @@ export function SyncStatus({ compact = false }: SyncStatusProps) {
   const { data, isLoading, isError } = useStatus();
   const sync = useSync();
   const setSource = useSetSyncSource();
-  const [source, setSourceState] = useState<SyncSource>('caixa');
-
-  useEffect(() => {
-    if (data?.syncSource) setSourceState(data.syncSource);
-  }, [data?.syncSource]);
+  // `override` keeps the user's pick while the status query is in flight; once
+  // the server confirms it, the persisted source takes over again.
+  const [override, setOverride] = useState<SyncSource | null>(null);
+  const source = override ?? data?.syncSource ?? 'caixa';
 
   if (isLoading) {
     return (
@@ -38,7 +37,7 @@ export function SyncStatus({ compact = false }: SyncStatusProps) {
   }
 
   function handleSourceChange(next: SyncSource) {
-    setSourceState(next);
+    setOverride(next);
     setSource.mutate(next);
   }
 

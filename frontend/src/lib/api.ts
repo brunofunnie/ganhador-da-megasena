@@ -27,12 +27,26 @@ export interface FrequencyItem {
   numero: string;
   frequencia: number;
   porcentagem: number;
+  zScore: number;
+  taxaSuavizada: number;
 }
 
 export interface ColdNumberItem {
   numero: string;
   ultimoConcurso: number | null;
   concursosAtrasado: number;
+  atrasoZ: number;
+  probabilidadeAtraso: number;
+}
+
+export interface SignificanceSummary {
+  totalDraws: number;
+  expectedPerNumber: number;
+  standardDeviation: number;
+  chiSquare: number;
+  degreesOfFreedom: number;
+  outliers: Array<{ numero: string; count: number; z: number }>;
+  interpretation: string;
 }
 
 export interface StatisticsResponse {
@@ -42,11 +56,73 @@ export interface StatisticsResponse {
   parity: {
     evenOddDistribution: Record<string, number>;
   };
+  significance: SignificanceSummary;
 }
 
 export interface GenerateResponse {
   modo: string;
   jogos: string[][];
+}
+
+export interface HitDistribution {
+  zero: number;
+  one: number;
+  two: number;
+  three: number;
+  four: number;
+  five: number;
+  six: number;
+  atLeast4: number;
+  atLeast5: number;
+}
+
+export interface BacktestSide {
+  tickets: number;
+  meanHits: number;
+  meanBestHits: number;
+  distribution: HitDistribution;
+}
+
+export interface BacktestResponse {
+  mode: string;
+  targets: number;
+  gamesPerDraw: number;
+  seed: string;
+  strategy: BacktestSide;
+  baseline: BacktestSide;
+  delta: {
+    meanHits: number;
+    meanHitsCI95: [number, number];
+    atLeast4Rate: number;
+    atLeast4CI95: [number, number];
+  };
+  significant: boolean;
+  note: string;
+}
+
+export interface FeatureModelResponse {
+  totalConcursos: number;
+  sum: {
+    mean: number;
+    standardDeviation: number;
+    p05: number;
+    p25: number;
+    p50: number;
+    p75: number;
+    p95: number;
+  };
+  evens: number[];
+  quadrantsUsed: number[];
+  consecutivePairs: number[];
+  primes: number[];
+  low: number[];
+  maxSameLastDigit: number[];
+  repeatsPrev: number[];
+  multiplesOf5: number[];
+  arithmeticRate: number;
+  allUnder32Rate: number;
+  significance: SignificanceSummary;
+  baseline: { expectedHitsPerTicket: number; quadraProbability: number };
 }
 
 export interface SimulationResponse {
@@ -188,6 +264,11 @@ export function fetchGenerate(params: {
   iterations?: number;
   strategies?: string;
   windowSize?: number;
+  poolSize?: number;
+  guarantee?: number;
+  candidates?: number;
+  maxOverlap?: number;
+  seed?: string;
 }): Promise<GenerateResponse> {
   const qs = new URLSearchParams();
   if (params.mode) qs.set('mode', params.mode);
@@ -198,7 +279,42 @@ export function fetchGenerate(params: {
   if (params.iterations) qs.set('iterations', String(params.iterations));
   if (params.strategies) qs.set('strategies', params.strategies);
   if (params.windowSize) qs.set('windowSize', String(params.windowSize));
+  if (params.poolSize) qs.set('poolSize', String(params.poolSize));
+  if (params.guarantee) qs.set('guarantee', String(params.guarantee));
+  if (params.candidates) qs.set('candidates', String(params.candidates));
+  if (params.maxOverlap !== undefined) qs.set('maxOverlap', String(params.maxOverlap));
+  if (params.seed) qs.set('seed', params.seed);
   return apiFetch(`/generate?${qs.toString()}`);
+}
+
+export function fetchBacktest(params: {
+  mode?: string;
+  window?: number;
+  games?: number;
+  seed?: string;
+  strategies?: string;
+  windowSize?: number;
+  iterations?: number;
+  poolSize?: number;
+  guarantee?: number;
+  candidates?: number;
+}): Promise<BacktestResponse> {
+  const qs = new URLSearchParams();
+  if (params.mode) qs.set('mode', params.mode);
+  if (params.window) qs.set('window', String(params.window));
+  if (params.games) qs.set('games', String(params.games));
+  if (params.seed) qs.set('seed', params.seed);
+  if (params.strategies) qs.set('strategies', params.strategies);
+  if (params.windowSize) qs.set('windowSize', String(params.windowSize));
+  if (params.iterations) qs.set('iterations', String(params.iterations));
+  if (params.poolSize) qs.set('poolSize', String(params.poolSize));
+  if (params.guarantee) qs.set('guarantee', String(params.guarantee));
+  if (params.candidates) qs.set('candidates', String(params.candidates));
+  return apiFetch(`/backtest?${qs.toString()}`);
+}
+
+export function fetchFeatureModel(): Promise<FeatureModelResponse> {
+  return apiFetch('/generator/features');
 }
 
 export function fetchSimulate(params: {

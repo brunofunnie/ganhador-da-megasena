@@ -62,6 +62,23 @@ describe('statistics', () => {
     expect(total).toBe(3);
   });
 
+  it('should expose z-scores and a significance summary', () => {
+    const stats = computeStatistics();
+    expect(stats.frequency[0].zScore).toBeTypeOf('number');
+    expect(stats.frequency[0].taxaSuavizada).toBeGreaterThan(0);
+    expect(stats.significance.totalDraws).toBe(3);
+    expect(stats.significance.expectedPerNumber).toBeCloseTo(0.3, 4);
+    expect(stats.significance.chiSquare).toBeGreaterThanOrEqual(0);
+    expect(Array.isArray(stats.significance.outliers)).toBe(true);
+  });
+
+  it('should express cold numbers as a geometric gap', () => {
+    const stats = computeStatistics();
+    expect(stats.coldNumbers[0].atrasoZ).toBeTypeOf('number');
+    expect(stats.coldNumbers[0].probabilidadeAtraso).toBeGreaterThanOrEqual(0);
+    expect(stats.coldNumbers[0].probabilidadeAtraso).toBeLessThanOrEqual(1);
+  });
+
   it('should compute gap intervals per number within the last N draws', () => {
     const intervals = computeGapIntervals(3);
 

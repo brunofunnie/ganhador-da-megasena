@@ -1,4 +1,8 @@
-import { computeStatistics } from './statistics';
+import { DrawDataset, TOTAL_NUMBERS, formatNumber, getDataset } from './dataset';
+import { BASE_RATE, buildFrequencyModel, NumberStat } from './statistical';
+import { buildFeatureModel } from './features';
+import { createRng, Rng } from './rng';
+import { generatePortfolio } from './portfolio';
 
 interface Strategy {
   id: string;
@@ -11,122 +15,229 @@ interface StrategyResult {
   jogos: string[][];
 }
 
+export interface StrategyOptions {
+  dataset?: DrawDataset;
+  rng?: Rng;
+}
+
 const STRATEGIES: Strategy[] = [
-  { id: 'top6', nome: 'Top 6 Históricos', descricao: 'Os 6 números mais sorteados de todos os tempos' },
-  { id: 'cold6', nome: 'Atrasados 6', descricao: 'Os 6 números que não saem há mais tempo' },
-  { id: 'balanced-3p3i', nome: '3P-3I Equilibrado', descricao: '3 pares + 3 ímpares mais frequentes de cada categoria' },
-  { id: 'quadrants', nome: 'Quadrantes', descricao: 'Pelo menos 1 número de cada quadrante (1-15, 16-30, 31-45, 46-60)' },
-  { id: 'full-cycle', nome: 'Ciclo Completo', descricao: '10 jogos cobrindo todos os 60 números' },
-  { id: 'sum-target', nome: 'Soma Alvo', descricao: 'Combinações com soma no intervalo 170-190' },
-  { id: 'primes-power', nome: 'Primos Power', descricao: 'Prioriza números primos com boa frequência' },
-  { id: 'avg-frequency', nome: 'Frequência Média', descricao: 'Números com frequência próxima da média' },
+  {
+    id: 'top6',
+    nome: 'Top 6 Históricos',
+    descricao: 'As 6 dezenas com maior taxa suavizada de aparição (não a frequência bruta)',
+  },
+  {
+    id: 'cold6',
+    nome: 'Atrasados 6',
+    descricao: 'As 6 dezenas com maior atraso em relação ao gap geométrico esperado (média 10)',
+  },
+  {
+    id: 'balanced-3p3i',
+    nome: '3P-3I Equilibrado',
+    descricao: '3 pares + 3 ímpares, escolhidos entre os mais frequentes de cada categoria',
+  },
+  {
+    id: 'quadrants',
+    nome: 'Quadrantes',
+    descricao: 'Pelo menos 1 dezena de cada quadrante (1-15, 16-30, 31-45, 46-60)',
+  },
+  {
+    id: 'full-cycle',
+    nome: 'Ciclo Completo',
+    descricao: '10 jogos cobrindo todos os 60 números, um por dezena em cada jogo',
+  },
+  {
+    id: 'sum-target',
+    nome: 'Soma Alvo',
+    descricao: 'Soma dentro do intervalo interquartil histórico (P25-P75)',
+  },
+  {
+    id: 'primes-power',
+    nome: 'Primos Power',
+    descricao: '3 primos + 3 não primos com boa frequência histórica',
+  },
+  {
+    id: 'avg-frequency',
+    nome: 'Frequência Média',
+    descricao: 'Dezenas com taxa suavizada mais próxima dos 10% esperados',
+  },
+  {
+    id: 'feature-conditioned',
+    nome: 'Condicionado a Features',
+    descricao: 'Amostra a distribuição conjunta real (soma, paridade, quadrantes, repetição)',
+  },
 ];
 
 export function getStrategies(): Strategy[] {
   return STRATEGIES;
 }
 
-export function executeStrategy(strategyId: string): StrategyResult {
-  const strategy = STRATEGIES.find(s => s.id === strategyId);
+function sortGame(numbers: string[]): string[] {
+  return [...new Set(numbers)].sort((a, b) => parseInt(a, 10) - parseInt(b, 10)).slice(0, 6);
+}
+
+function sortStats(stats: NumberStat[]): string[] {
+  return sortGame(stats.map((stat) => stat.numero));
+}
+
+function topBy<T>(items: T[], score: (item: T) => number, count: number): T[] {
+  return [...items].sort((a, b) => score(b) - score(a)).slice(0, count);
+}
+
+function pickWeighted(stats: NumberStat[], count: number, rng: Rng, weight: (s: NumberStat) => number): string[] {
+  const pool = [...stats];
+  const picked: string[] = [];
+  while (picked.length < count && pool.length > 0) {
+    const index = rng.weightedIndex(pool.map((stat) => Math.max(1e-6, weight(stat))));
+    picked.push(pool[index].numero);
+    pool.splice(index, 1);
+  }
+  return picked;
+}
+
+export function executeStrategy(
+  strategyId: string,
+  options: StrategyOptions = {}
+): StrategyResult {
+  const strategy = STRATEGIES.find((s) => s.id === strategyId);
   if (!strategy) throw new Error(`Estratégia não encontrada: ${strategyId}`);
 
-  const stats = computeStatistics();
+  const dataset = options.dataset ?? getDataset();
+  const rng = options.rng ?? createRng();
+  const model = buildFrequencyModel(dataset);
 
   let jogos: string[][] = [];
 
   switch (strategyId) {
     case 'top6': {
-      jogos = [stats.frequency.slice(0, 6).map(f => f.numero)];
+      jogos = [sortStats(model.byFrequency.slice(0, 6))];
       break;
     }
 
     case 'cold6': {
-      jogos = [stats.coldNumbers.slice(0, 6).map(c => c.numero)];
+      jogos = [sortStats(model.byGap.slice(0, 6))];
       break;
     }
 
     case 'balanced-3p3i': {
-      const evens = stats.frequency.filter(f => parseInt(f.numero) % 2 === 0);
-      const odds = stats.frequency.filter(f => parseInt(f.numero) % 2 !== 0);
-      jogos = [[...evens.slice(0, 3).map(f => f.numero), ...odds.slice(0, 3).map(f => f.numero)]];
+      const all = Array.from(model.numbers.values());
+      const evens = all.filter((stat) => parseInt(stat.numero, 10) % 2 === 0);
+      const odds = all.filter((stat) => parseInt(stat.numero, 10) % 2 !== 0);
+      const pickedEvens = pickWeighted(
+        topBy(evens, (s) => s.count, 10),
+        3,
+        rng,
+        (s) => s.hotWeight
+      );
+      const pickedOdds = pickWeighted(
+        topBy(odds, (s) => s.count, 10),
+        3,
+        rng,
+        (s) => s.hotWeight
+      );
+      jogos = [sortGame([...pickedEvens, ...pickedOdds])];
       break;
     }
 
     case 'quadrants': {
-      const nums = stats.frequency.slice(0, 12).map(f => parseInt(f.numero));
-      const q = [
-        nums.filter(n => n >= 1 && n <= 15),
-        nums.filter(n => n >= 16 && n <= 30),
-        nums.filter(n => n >= 31 && n <= 45),
-        nums.filter(n => n >= 46 && n <= 60),
-      ];
-      const pick = [
-        (q[0][0] || q[1][0] || q[2][0] || q[3][0]).toString().padStart(2, '0'),
-        (q[1][0] || q[2][0] || q[3][0] || q[0][0]).toString().padStart(2, '0'),
-        (q[2][0] || q[3][0] || q[0][0] || q[1][0]).toString().padStart(2, '0'),
-        (q[3][0] || q[0][0] || q[1][0] || q[2][0]).toString().padStart(2, '0'),
-      ];
-      const rest = stats.frequency
-        .filter(f => !pick.includes(f.numero))
-        .slice(0, 2)
-        .map(f => f.numero);
-      jogos = [[...pick, ...rest].slice(0, 6)];
+      const all = Array.from(model.numbers.values());
+      const quadrantOf = (numero: string): number =>
+        Math.min(3, Math.floor((parseInt(numero, 10) - 1) / 15));
+
+      const picked: string[] = [];
+      for (let quadrant = 0; quadrant < 4; quadrant++) {
+        const candidates = all
+          .filter((stat) => quadrantOf(stat.numero) === quadrant && !picked.includes(stat.numero))
+          .sort((a, b) => b.count - a.count);
+        if (candidates.length > 0) picked.push(candidates[0].numero);
+      }
+
+      const rest = model.byFrequency
+        .filter((stat) => !picked.includes(stat.numero))
+        .slice(0, 6 - picked.length)
+        .map((stat) => stat.numero);
+
+      jogos = [sortGame([...picked, ...rest])];
       break;
     }
 
     case 'full-cycle': {
-      const all = Array.from({ length: 60 }, (_, i) =>
-        (i + 1).toString().padStart(2, '0')
-      );
+      // 10 tickets, each with one number per decade, covering all 60 exactly once.
       for (let g = 0; g < 10; g++) {
-        jogos.push(all.slice(g * 6, g * 6 + 6));
+        jogos.push(
+          Array.from({ length: 6 }, (_, decade) => formatNumber(g + 1 + decade * 10))
+        );
       }
       break;
     }
 
     case 'sum-target': {
-      const pool = stats.frequency.slice(0, 30).map(f => parseInt(f.numero));
-      let found = false;
-      for (let attempt = 0; attempt < 1000 && !found; attempt++) {
-        const shuffled = [...pool].sort(() => Math.random() - 0.5);
-        const candidate = shuffled.slice(0, 6);
-        const sum = candidate.reduce((a, b) => a + b, 0);
-        if (sum >= 170 && sum <= 190) {
-          jogos = [candidate.map(n => n.toString().padStart(2, '0')).sort()];
-          found = true;
-        }
+      const featureModel = buildFeatureModel(dataset);
+      const min = Math.floor(featureModel.sum.p25);
+      const max = Math.ceil(featureModel.sum.p75);
+      const pool = model.byFrequency.slice(0, 30);
+      let found: string[] | null = null;
+
+      for (let attempt = 0; attempt < 2000 && !found; attempt++) {
+        const candidate = pickWeighted(pool, 6, rng, (stat) => stat.shrunkRate);
+        const sum = candidate.reduce((acc, numero) => acc + parseInt(numero, 10), 0);
+        if (sum >= min && sum <= max) found = candidate;
       }
-      if (!found) {
-        jogos = [stats.frequency.slice(0, 6).map(f => f.numero)];
-      }
+
+      jogos = [found ?? sortStats(model.byFrequency.slice(0, 6))];
       break;
     }
 
     case 'primes-power': {
       const primes = new Set([2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59]);
-      const primeNums = stats.frequency.filter(f => primes.has(parseInt(f.numero)));
-      const nonPrime = stats.frequency.filter(f => !primes.has(parseInt(f.numero)));
-      jogos = [[
-        ...primeNums.slice(0, 4).map(f => f.numero),
-        ...nonPrime.slice(0, 2).map(f => f.numero)
-      ]];
+      const all = Array.from(model.numbers.values());
+      const primeStats = all.filter((stat) => primes.has(parseInt(stat.numero, 10)));
+      const otherStats = all.filter((stat) => !primes.has(parseInt(stat.numero, 10)));
+
+      jogos = [
+        sortGame([
+          ...topBy(primeStats, (s) => s.shrunkRate, 3).map((s) => s.numero),
+          ...topBy(otherStats, (s) => s.shrunkRate, 3).map((s) => s.numero),
+        ]),
+      ];
       break;
     }
 
     case 'avg-frequency': {
-      const avg = stats.frequency.reduce((sum, f) => sum + f.frequencia, 0) / stats.frequency.length;
-      const closest = [...stats.frequency]
-        .sort((a, b) =>
-          Math.abs(a.frequencia - avg) - Math.abs(b.frequencia - avg)
-        );
-      jogos = [closest.slice(0, 6).map(f => f.numero)];
+      const closest = [...model.numbers.values()].sort(
+        (a, b) => Math.abs(a.shrunkRate - BASE_RATE) - Math.abs(b.shrunkRate - BASE_RATE)
+      );
+      jogos = [sortStats(closest.slice(0, 6))];
+      break;
+    }
+
+    case 'feature-conditioned': {
+      jogos = generatePortfolio({
+        dataset,
+        count: 1,
+        rng,
+        candidatesPerGame: 400,
+      }).games;
       break;
     }
   }
 
   for (const jogo of jogos) {
-    jogo.sort((a, b) => parseInt(a) - parseInt(b));
+    jogo.sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
   }
 
   return { estrategia: strategy, jogos };
+}
+
+export const STRATEGY_IDS = STRATEGIES.map((strategy) => strategy.id);
+
+/** Sanity check used by tests: every strategy returns unique numbers in range. */
+export function isValidGame(game: string[], expectedSize = 6): boolean {
+  if (game.length !== expectedSize) return false;
+  const unique = new Set(game);
+  if (unique.size !== game.length) return false;
+  return game.every((numero) => {
+    const value = parseInt(numero, 10);
+    return Number.isInteger(value) && value >= 1 && value <= TOTAL_NUMBERS;
+  });
 }

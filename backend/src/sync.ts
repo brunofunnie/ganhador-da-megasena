@@ -1,4 +1,5 @@
 import { DrawPrize, DrawRecord, getDb } from './db';
+import { invalidateDataset } from './dataset';
 
 const API_BASE = 'https://loteriascaixa-api.herokuapp.com/api';
 const LOTERIA = 'megasena';
@@ -183,6 +184,9 @@ function persistDraws(draws: StoredDraw[]): { inserted: number; total: number } 
   });
 
   const inserted = transaction();
+  // The in-memory dataset is keyed by (db, count, max concurso); an UPDATE that
+  // rewrites an existing draw does not change the count, so drop it explicitly.
+  invalidateDataset();
   return { inserted, total: draws.length };
 }
 

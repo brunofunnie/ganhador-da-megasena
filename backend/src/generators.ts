@@ -1,15 +1,52 @@
-import { getDb } from './db';
-import { getTemporalTrend } from './temporalTrend';
+import {
+  DrawDataset,
+  PICK_SIZE,
+  allNumbers,
+  formatNumber,
+  getDataset,
+} from './dataset';
+import { createRng, Rng } from './rng';
+import {
+  FrequencyModel,
+  buildFrequencyModel,
+  buildTrendModel,
+  clamp,
+  weightsFromModel,
+} from './statistical';
+import {
+  buildFeatureModel,
+  extractFeatures,
+  plausibility,
+  popularityPenalty,
+} from './features';
+import {
+  generatePortfolio,
+  normalizeGame,
+  overlapCount,
+  sampleWeighted,
+} from './portfolio';
 import { runMonteCarlo } from './monteCarlo';
 import { runEnsemble } from './ensemble';
-import { buildMarkovMatrix, generateMarkovChain } from './markov';
+import { buildTransitionMatrix, generateMarkovChain } from './markov';
+import { buildCoveringWheel } from './wheel';
 
 export const GENERATOR_MODES = [
-  'random', 'hot', 'cold', 'balanced', 'genetic', 'sequences', 'fechamento', 'dreams',
-  'trend', 'monte-carlo', 'ensemble', 'markov'
+  'random',
+  'hot',
+  'cold',
+  'balanced',
+  'genetic',
+  'sequences',
+  'fechamento',
+  'dreams',
+  'trend',
+  'statistical',
+  'monte-carlo',
+  'ensemble',
+  'markov',
 ] as const;
 
-export type GeneratorMode = typeof GENERATOR_MODES[number];
+export type GeneratorMode = (typeof GENERATOR_MODES)[number];
 
 export interface GeneratorOptions {
   mode: GeneratorMode;
@@ -20,278 +57,474 @@ export interface GeneratorOptions {
   iterations?: number;
   strategies?: string[];
   windowSize?: number;
+  /** Fechamento: size of the covered pool (7-12). */
+  poolSize?: number;
+  /** Fechamento: guaranteed hits when the 6 drawn numbers are inside the pool. */
+  guarantee?: number;
+  /** Feature-conditioned modes: candidates evaluated per ticket. */
+  candidates?: number;
+  /** Maximum numbers shared between two tickets. */
+  maxOverlap?: number;
+  seed?: string;
+  /** Walk-forward view used by the backtest. */
+  dataset?: DrawDataset;
 }
 
-function formatNum(n: number): string {
-  return n.toString().padStart(2, '0');
-}
+const PRIMES = new Set([2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59]);
+const FIBONACCI = new Set([1, 2, 3, 5, 8, 13, 21, 34, 55]);
 
-function shuffleArray<T>(arr: T[]): T[] {
-  const shuffled = [...arr];
-  for (let i = shuffled.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-  }
-  return shuffled;
-}
-
-function getAvailableNumbers(
-  fixedNumbers: string[],
-  excludeNumbers: string[]
-): number[] {
-  const excluded = new Set([...excludeNumbers, ...fixedNumbers].map(n => parseInt(n)));
-
-  return Array.from({ length: 60 }, (_, i) => i + 1)
-    .filter(n => !excluded.has(n));
-}
-
-function generateRandomNumbers(count: number, pool: number[]): string[] {
-  const shuffled = shuffleArray(pool);
-  return shuffled.slice(0, count).map(formatNum).sort();
-}
-
-function getFrequencyMap(): Map<string, number> {
-  const db = getDb();
-  const draws = db.prepare('SELECT dezenas FROM draws').all() as { dezenas: string }[];
-  const freq = new Map<string, number>();
-  for (const d of draws) {
-    const dezenas: string[] = JSON.parse(d.dezenas);
-    for (const n of dezenas) {
-      freq.set(n, (freq.get(n) || 0) + 1);
+function parseNumbers(list: readonly string[], label: string): string[] {
+  const unique = new Set<number>();
+  for (const raw of list) {
+    const value = parseInt(String(raw).trim(), 10);
+    if (!Number.isInteger(value) || value < 1 || value > 60) {
+      throw new Error(`${label}: dezena inválida "${raw}" (use 1 a 60)`);
     }
+    unique.add(value);
   }
-  return freq;
+  return Array.from(unique)
+    .sort((a, b) => a - b)
+    .map(formatNumber);
 }
 
-function getColdRankMap(): Map<string, number> {
-  const db = getDb();
-  const draws = db.prepare(
-    'SELECT concurso, dezenas FROM draws ORDER BY concurso ASC'
-  ).all() as { concurso: number; dezenas: string }[];
-
-  const maxConcurso = draws.length > 0 ? draws[draws.length - 1].concurso : 0;
-  const lastSeen = new Map<string, number>();
-
-  for (let i = 1; i <= 60; i++) {
-    lastSeen.set(formatNum(i), 0);
-  }
-  for (const d of draws) {
-    const dezenas: string[] = JSON.parse(d.dezenas);
-    for (const n of dezenas) {
-      lastSeen.set(n, d.concurso);
-    }
-  }
-
-  const coldRank = new Map<string, number>();
-  for (const [num, last] of lastSeen) {
-    coldRank.set(num, maxConcurso - last);
-  }
-  return coldRank;
+function previousSet(dataset: DrawDataset): ReadonlySet<number> | undefined {
+  const latest = dataset.draws[dataset.draws.length - 1];
+  if (!latest) return undefined;
+  return new Set(latest.numbers.map((n) => parseInt(n, 10)));
 }
 
-function weightedPick(pool: number[], weights: Map<string, number>, count: number): string[] {
-  const remaining = new Set(pool.map(formatNum));
-  const result: string[] = [];
+/**
+ * Real genetic algorithm (population, tournament selection, crossover, mutation).
+ * Fitness = structural plausibility + hot/cold mix − popular-ticket penalty.
+ */
+function runGenetic(options: {
+  dataset: DrawDataset;
+  fixed: string[];
+  available: string[];
+  needed: number;
+  count: number;
+  rng: Rng;
+  /** Evaluation budget hint (smaller values are used by the backtest). */
+  candidates?: number;
+}): string[][] {
+  const { dataset, fixed, available, needed, count, rng } = options;
+  const model = buildFeatureModel(dataset);
+  const freq = buildFrequencyModel(dataset);
+  const previous = previousSet(dataset);
 
-  for (let i = 0; i < count; i++) {
-    const available = Array.from(remaining).map(k => parseInt(k));
-    const totalWeight = available.reduce((sum, n) => sum + (weights.get(formatNum(n)) || 1), 0);
-    let rand = Math.random() * totalWeight;
-    let selected = '';
-    for (const n of available) {
-      const key = formatNum(n);
-      if (!remaining.has(key)) continue;
-      rand -= (weights.get(key) || 1);
-      if (rand <= 0) {
-        selected = key;
-        break;
+  const mixWeight = (numero: string): number => {
+    const stat = freq.numbers.get(numero);
+    if (!stat) return 1;
+    return Math.max(stat.hotWeight, stat.coldWeight);
+  };
+
+  const randomGame = (): string[] =>
+    normalizeGame([...fixed, ...sampleWeighted(available, undefined, needed, rng)]);
+
+  const fitness = (game: string[]): number => {
+    const features = extractFeatures(game, previous);
+    let score = plausibility(features, model);
+    for (const numero of game) score += 0.45 * Math.log(Math.max(mixWeight(numero), 1e-6));
+    score += popularityPenalty(features);
+
+    // Keep the population from drifting into extreme sums even if their
+    // hot/cold mix is attractive.
+    const sumZ = Math.abs((features.sum - model.sum.mean) / model.sum.standardDeviation);
+    if (sumZ > 1.5) score -= 2 * (sumZ - 1.5) ** 2;
+    return score;
+  };
+
+  const crossover = (a: string[], b: string[]): string[] => {
+    const fixedSet = new Set(fixed);
+    const union = Array.from(new Set([...a, ...b])).filter((n) => !fixedSet.has(n));
+    const sampled = sampleWeighted(union, undefined, needed, rng);
+    return normalizeGame([...fixed, ...sampled]);
+  };
+
+  const mutate = (game: string[]): string[] => {
+    if (needed === 0) return game;
+    const fixedSet = new Set(fixed);
+    const outside = available.filter((n) => !game.includes(n));
+    if (outside.length === 0) return game;
+    const mutable = game.filter((n) => !fixedSet.has(n));
+    if (mutable.length === 0) return game;
+    const victim = mutable[rng.int(mutable.length)];
+    const replacement = outside[rng.int(outside.length)];
+    return normalizeGame([...game.filter((n) => n !== victim), replacement, ...fixed]);
+  };
+
+  const tournament = (population: string[][], size = 3): string[] => {
+    let best = population[rng.int(population.length)];
+    let bestFitness = fitness(best);
+    for (let i = 1; i < size; i++) {
+      const candidate = population[rng.int(population.length)];
+      const candidateFitness = fitness(candidate);
+      if (candidateFitness > bestFitness) {
+        best = candidate;
+        bestFitness = candidateFitness;
       }
     }
-    if (!selected) {
-      const avail = Array.from(remaining);
-      selected = avail[Math.floor(Math.random() * avail.length)];
+    return best;
+  };
+
+  const POPULATION = 72;
+  const ELITE = 8;
+  const budget = options.candidates ?? POPULATION * 40;
+  const GENERATIONS = clamp(Math.round(budget / POPULATION), 12, 40);
+
+  let population: string[][] = Array.from({ length: POPULATION }, randomGame);
+
+  for (let generation = 0; generation < GENERATIONS; generation++) {
+    const ranked = [...population].sort((a, b) => fitness(b) - fitness(a));
+    const next: string[][] = ranked.slice(0, ELITE);
+
+    while (next.length < POPULATION) {
+      const child = crossover(tournament(ranked), tournament(ranked));
+      next.push(rng.next() < 0.35 ? mutate(child) : child);
     }
-    remaining.delete(selected);
-    result.push(selected);
+    population = next;
   }
 
-  return result.sort();
+  const ranked = [...population]
+    .map((game) => ({ game, score: fitness(game) }))
+    .sort((a, b) => b.score - a.score);
+
+  const selected: string[][] = [];
+  for (const entry of ranked) {
+    if (selected.some((game) => overlapCount(game, entry.game) > 2)) continue;
+    selected.push(entry.game);
+    if (selected.length >= count) break;
+  }
+
+  let fillAttempts = 0;
+  while (selected.length < count && fillAttempts < 400) {
+    fillAttempts++;
+    const extra = randomGame();
+    if (!selected.some((game) => game.join(',') === extra.join(','))) selected.push(extra);
+  }
+
+  return selected;
+}
+
+function chooseWheelPool(options: {
+  available: string[];
+  size: number;
+  freq: FrequencyModel;
+  rng: Rng;
+}): string[] {
+  const { available, size, freq, rng } = options;
+
+  const scored = available
+    .map((numero) => {
+      const stat = freq.numbers.get(numero);
+      return { numero, score: (stat?.hotWeight ?? 1) * (0.9 + 0.2 * rng.next()) };
+    })
+    .sort((a, b) => b.score - a.score);
+
+  const pool: string[] = [];
+  for (const entry of scored) {
+    if (pool.length >= size) break;
+    if (!pool.includes(entry.numero)) pool.push(entry.numero);
+  }
+
+  // Guarantee at least one number per quadrant when the pool allows it.
+  for (let quadrant = 0; quadrant < 4; quadrant++) {
+    const hasQuadrant = pool.some((numero) => {
+      const value = parseInt(numero, 10);
+      return Math.min(3, Math.floor((value - 1) / 15)) === quadrant;
+    });
+    if (hasQuadrant) continue;
+    const candidate = scored.find(
+      (entry) =>
+        !pool.includes(entry.numero) &&
+        Math.min(3, Math.floor((parseInt(entry.numero, 10) - 1) / 15)) === quadrant
+    );
+    if (candidate && pool.length < size) pool.push(candidate.numero);
+  }
+
+  return normalizeGame(pool).slice(0, size);
 }
 
 export function generateNumbers(options: GeneratorOptions): string[][] {
   const {
     mode,
     count = 1,
-    fixedNumbers = [],
-    excludeNumbers = [],
-    seedNumbers = []
+    seedNumbers = [],
+    iterations = 10000,
+    strategies,
+    windowSize = 50,
   } = options;
 
-  const actualCount = Math.min(Math.max(count, 1), 10);
-  const available = getAvailableNumbers(fixedNumbers, excludeNumbers);
-  const games: string[][] = [];
+  const dataset = options.dataset ?? getDataset();
+  const rng = createRng(options.seed);
 
-  for (let g = 0; g < actualCount; g++) {
-    let picked: string[] = [];
+  const fixed = parseNumbers(options.fixedNumbers ?? [], 'Números fixos');
+  const excluded = parseNumbers(options.excludeNumbers ?? [], 'Números excluídos').filter(
+    (numero) => !fixed.includes(numero)
+  );
 
-    switch (mode) {
-      case 'random': {
-        const randomNums = generateRandomNumbers(6 - fixedNumbers.length, available);
-        picked = [...fixedNumbers, ...randomNums];
-        break;
-      }
+  if (fixed.length > PICK_SIZE) {
+    throw new Error('No máximo 6 números fixos são permitidos');
+  }
 
-      case 'hot': {
-        const freq = getFrequencyMap();
-        const pool = available.filter(n => (freq.get(formatNum(n)) || 0) > 0);
-        picked = weightedPick(
-          pool.length >= 6 ? pool : available,
-          freq,
-          6 - fixedNumbers.length
-        );
-        picked = [...fixedNumbers, ...picked];
-        break;
-      }
+  const actualCount = clamp(count, 1, 10);
+  const available = allNumbers().filter(
+    (numero) => !fixed.includes(numero) && !excluded.includes(numero)
+  );
+  const needed = PICK_SIZE - fixed.length;
 
-      case 'cold': {
-        const coldRank = getColdRankMap();
-        const pool = available;
-        picked = weightedPick(pool, coldRank, 6 - fixedNumbers.length);
-        picked = [...fixedNumbers, ...picked];
-        break;
-      }
+  if (needed === 0) return [normalizeGame(fixed)];
 
-      case 'balanced': {
-        const evens = available.filter(n => n % 2 === 0);
-        const odds = available.filter(n => n % 2 !== 0);
-        const needed = 6 - fixedNumbers.length;
-        const evensNeeded = Math.floor(needed / 2);
-        const oddsNeeded = needed - evensNeeded;
+  if (available.length < needed) {
+    throw new Error('Não há dezenas disponíveis suficientes após as exclusões');
+  }
 
-        const shuffledEvens = shuffleArray(evens).slice(0, evensNeeded).map(formatNum);
-        const shuffledOdds = shuffleArray(odds).slice(0, oddsNeeded).map(formatNum);
-        picked = [...fixedNumbers, ...shuffledEvens, ...shuffledOdds];
-        break;
-      }
+  let freqModel: FrequencyModel | null = null;
+  const getFreq = (): FrequencyModel => (freqModel ??= buildFrequencyModel(dataset));
 
-      case 'genetic': {
-        const freq = getFrequencyMap();
-        const coldRank = getColdRankMap();
+  /**
+   * Merges fixed numbers with a sampled ticket without ever dropping a fixed
+   * number (the old `.slice(0, 6)` could silently remove one).
+   */
+  const finish = (sampled: string[]): string[] => {
+    const extra = normalizeGame(sampled)
+      .filter((numero) => !fixed.includes(numero))
+      .slice(0, needed);
+    const result = [...fixed, ...extra];
 
-        const freqSorted = available
-          .map(n => formatNum(n))
-          .filter(n => (freq.get(n) || 0) > 0)
-          .sort((a, b) => (freq.get(b) || 0) - (freq.get(a) || 0));
-        const coldSorted = available
-          .map(n => formatNum(n))
-          .sort((a, b) => (coldRank.get(b) || 0) - (coldRank.get(a) || 0));
+    if (result.length < PICK_SIZE) {
+      const hot = weightsFromModel(getFreq(), 'hot');
+      const pool = available.filter((numero) => !result.includes(numero));
+      result.push(...sampleWeighted(pool, hot, PICK_SIZE - result.length, rng));
+    }
 
-        const hotPicks = freqSorted.slice(0, 3);
-        const coldPicks = coldSorted.filter(n => !hotPicks.includes(n)).slice(0, 3);
-        picked = [...fixedNumbers, ...hotPicks, ...coldPicks];
-        break;
-      }
+    return normalizeGame(result);
+  };
 
-      case 'sequences': {
-        const primes = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59];
-        const fib = [1, 2, 3, 5, 8, 13, 21, 34, 55];
-        const seqPool = Array.from(new Set([...primes, ...fib]));
+  // Modes that produce the whole batch at once.
+  if (mode === 'monte-carlo') {
+    const result = runMonteCarlo({
+      iterations,
+      topK: actualCount,
+      fixedNumbers: fixed,
+      excludeNumbers: excluded,
+      dataset,
+      rng,
+    });
+    return result.jogos;
+  }
 
-        const inPool = available.filter(n => seqPool.includes(n));
-        const needed = 6 - fixedNumbers.length;
-        const fromSeq = inPool.slice(0, needed);
-        const rest = generateRandomNumbers(Math.max(0, needed - fromSeq.length), available);
-        picked = [...fixedNumbers, ...fromSeq.map(formatNum), ...rest];
-        break;
-      }
+  if (mode === 'ensemble') {
+    return runEnsemble({
+      strategyIds: strategies ?? [
+        'top6',
+        'cold6',
+        'balanced-3p3i',
+        'quadrants',
+        'primes-power',
+        'avg-frequency',
+      ],
+      count: actualCount,
+      dataset,
+      rng,
+      fixedNumbers: fixed,
+      excludeNumbers: excluded,
+    });
+  }
 
-      case 'fechamento': {
-        const baseNums = available.slice(0, 7);
-        const combos = generateCombinations(baseNums.map(formatNum), 6);
-        if (combos.length > 0) {
-          picked = combos[g % combos.length];
-        } else {
-          picked = generateRandomNumbers(6 - fixedNumbers.length, available);
+  if (mode === 'statistical') {
+    return generatePortfolio({
+      dataset,
+      count: actualCount,
+      rng,
+      fixedNumbers: fixed,
+      excludeNumbers: excluded,
+      candidatesPerGame: clamp(options.candidates ?? 400, 50, 8000),
+      maxOverlap: clamp(options.maxOverlap ?? 2, 0, 5),
+    }).games;
+  }
+
+  if (mode === 'genetic') {
+    return runGenetic({
+      dataset,
+      fixed,
+      available,
+      needed,
+      count: actualCount,
+      rng,
+      candidates: options.candidates,
+    });
+  }
+
+  if (mode === 'fechamento') {
+    const totalPoolSize = clamp(options.poolSize ?? 8, PICK_SIZE + 1, 12);
+    const freePoolSize = Math.max(needed + 1, totalPoolSize - fixed.length);
+    const guarantee = clamp(options.guarantee ?? 4, 1, needed);
+    const tickets: string[][] = [];
+
+    for (let attempt = 0; attempt < 8 && tickets.length < actualCount; attempt++) {
+      const pool = chooseWheelPool({
+        available,
+        size: Math.min(freePoolSize, available.length),
+        freq: getFreq(),
+        rng,
+      });
+      const wheel = buildCoveringWheel(pool, guarantee, 300, needed);
+      for (const ticket of wheel.tickets) {
+        const normalized = normalizeGame([...fixed, ...ticket]);
+        if (!tickets.some((existing) => existing.join(',') === normalized.join(','))) {
+          tickets.push(normalized);
         }
-        picked = [...fixedNumbers, ...picked].slice(0, 6);
-        break;
-      }
-
-      case 'dreams': {
-        const seedPool = seedNumbers.length > 0
-          ? available.filter(n => seedNumbers.includes(formatNum(n)))
-          : available;
-        const needed = 6 - fixedNumbers.length;
-
-        const fromSeed = shuffleArray(seedPool).slice(0, needed);
-        const remaining = generateRandomNumbers(
-          Math.max(0, needed - fromSeed.length),
-          available.filter(number => !fromSeed.includes(number))
-        );
-        picked = [...fixedNumbers, ...fromSeed.map(formatNum), ...remaining];
-        break;
-      }
-
-      case 'trend': {
-        const windowSize = options.windowSize || 50;
-        const scores = getTemporalTrend(windowSize);
-        const weightMap = new Map<string, number>();
-        for (const [num, score] of scores) {
-          weightMap.set(num, Math.abs(score) + 0.001);
-        }
-        picked = weightedPick(available, weightMap, 6 - fixedNumbers.length);
-        picked = [...fixedNumbers, ...picked];
-        break;
-      }
-
-      case 'monte-carlo': {
-        const iterations = options.iterations || 10000;
-        const result = runMonteCarlo({
-          iterations,
-          topK: actualCount,
-          fixedNumbers,
-          excludeNumbers
-        });
-        games.push(...result.jogos);
-        continue;
-      }
-
-      case 'ensemble': {
-        const strategies = options.strategies || ['top6', 'cold6', 'balanced-3p3i', 'quadrants', 'primes-power', 'avg-frequency'];
-        const ensembleGames = runEnsemble({ strategyIds: strategies, count: actualCount });
-        games.push(...ensembleGames);
-        continue;
-      }
-
-      case 'markov': {
-        const matrix = buildMarkovMatrix();
-        picked = generateMarkovChain(matrix);
-        picked = [...fixedNumbers, ...picked].slice(0, 6);
-        break;
+        if (tickets.length >= actualCount) break;
       }
     }
 
-    picked = [...new Set(picked)].slice(0, 6);
-    picked.sort((a, b) => parseInt(a) - parseInt(b));
-    games.push(picked);
+    return tickets.sort((a, b) => parseInt(a[0], 10) - parseInt(b[0], 10));
+  }
+
+  const trendModel = mode === 'trend' ? buildTrendModel(dataset, windowSize) : null;
+  const trendWeights = trendModel
+    ? new Map(
+        Array.from(trendModel.entries()).map(([numero, stat]) => [
+          numero,
+          Math.exp(clamp(stat.z, -3, 3) * 0.35),
+        ])
+      )
+    : undefined;
+
+  let markovMatrix: number[][] | null = null;
+
+  const buildOne = (): string[] => {
+    switch (mode) {
+      case 'random': {
+        return finish(sampleWeighted(available, undefined, needed, rng));
+      }
+
+      case 'hot': {
+        return finish(sampleWeighted(available, weightsFromModel(getFreq(), 'hot'), needed, rng));
+      }
+
+      case 'cold': {
+        return finish(sampleWeighted(available, weightsFromModel(getFreq(), 'cold'), needed, rng));
+      }
+
+      case 'balanced': {
+        const evens = available.filter((numero) => parseInt(numero, 10) % 2 === 0);
+        const odds = available.filter((numero) => parseInt(numero, 10) % 2 !== 0);
+        const fixedEvens = fixed.filter((numero) => parseInt(numero, 10) % 2 === 0).length;
+        const evensNeeded = clamp(3 - fixedEvens, 0, needed);
+        const oddsNeeded = needed - evensNeeded;
+
+        const hot = weightsFromModel(getFreq(), 'hot');
+        const pickedEvens = sampleWeighted(evens, hot, Math.min(evensNeeded, evens.length), rng);
+        const pickedOdds = sampleWeighted(odds, hot, Math.min(oddsNeeded, odds.length), rng);
+        const picked = [...pickedEvens, ...pickedOdds];
+
+        if (picked.length < needed) {
+          const rest = available.filter((numero) => !picked.includes(numero));
+          picked.push(...sampleWeighted(rest, hot, needed - picked.length, rng));
+        }
+        return finish(picked);
+      }
+
+      case 'sequences': {
+        const sequencePool = available.filter((numero) => {
+          const value = parseInt(numero, 10);
+          return PRIMES.has(value) || FIBONACCI.has(value);
+        });
+
+        const hot = weightsFromModel(getFreq(), 'hot');
+        const fromSequence = sampleWeighted(
+          sequencePool,
+          hot,
+          Math.min(needed, sequencePool.length),
+          rng
+        );
+        const rest = available.filter((numero) => !fromSequence.includes(numero));
+        return finish([
+          ...fromSequence,
+          ...sampleWeighted(rest, hot, needed - fromSequence.length, rng),
+        ]);
+      }
+
+      case 'dreams': {
+        const seeds = parseNumbers(seedNumbers, 'Números semente')
+          .filter((numero) => !excluded.includes(numero) && !fixed.includes(numero))
+          .slice(0, Math.max(0, 5 - fixed.length));
+        const seedSet = new Set(seeds);
+        const hot = weightsFromModel(getFreq(), 'hot');
+        const boosted = new Map<string, number>();
+        for (const numero of allNumbers()) {
+          boosted.set(numero, (hot.get(numero) ?? 1) * (seedSet.has(numero) ? 8 : 1));
+        }
+
+        const seedNeeded = needed - seeds.filter((n) => !fixed.includes(n)).length;
+        const fillPool = available.filter((numero) => !seedSet.has(numero));
+        return finish([...seeds, ...sampleWeighted(fillPool, boosted, seedNeeded, rng)]);
+      }
+
+      case 'trend': {
+        const positive = new Map<string, number>();
+        for (const [numero, weight] of trendWeights ?? []) {
+          if (weight > 1) positive.set(numero, weight);
+        }
+        const trendPool =
+          positive.size >= needed
+            ? available.filter((numero) => positive.has(numero))
+            : available;
+        return finish(
+          sampleWeighted(
+            trendPool,
+            positive.size >= needed ? positive : trendWeights,
+            needed,
+            rng
+          )
+        );
+      }
+
+      case 'markov': {
+        markovMatrix ??= buildTransitionMatrix(dataset);
+        const chain = generateMarkovChain(markovMatrix, dataset, rng);
+        return finish(sampleWeighted(chain, undefined, needed, rng));
+      }
+
+      default: {
+        return finish(sampleWeighted(available, undefined, needed, rng));
+      }
+    }
+  };
+
+  // Portfolio-level diversity: two tickets never share more than `maxOverlap`
+  // numbers (fixed numbers count toward the floor).
+  const maxOverlap = Math.max(fixed.length, clamp(options.maxOverlap ?? 2, 0, 5));
+  const games: string[][] = [];
+
+  for (let g = 0; g < actualCount; g++) {
+    let game = buildOne();
+    for (
+      let attempt = 0;
+      attempt < 40 && games.some((existing) => overlapCount(existing, game) > maxOverlap);
+      attempt++
+    ) {
+      game = buildOne();
+    }
+    games.push(game);
   }
 
   return games;
 }
 
-function generateCombinations(arr: string[], k: number): string[][] {
-  const result: string[][] = [];
-  function combine(start: number, current: string[]) {
-    if (current.length === k) {
-      result.push([...current]);
-      return;
-    }
-    for (let i = start; i < arr.length; i++) {
-      current.push(arr[i]);
-      combine(i + 1, current);
-      current.pop();
-    }
-  }
-  combine(0, []);
-  return result;
+/** Expected hits of one ticket against one draw: 6 · (6/60) = 0.6. */
+export function expectedHitsPerTicket(): number {
+  return PICK_SIZE * (PICK_SIZE / 60);
+}
+
+/** P(exactly 4 hits) = C(6,4)·C(54,2)/C(60,6) ≈ 1/2332. */
+export function quadraProbability(): number {
+  const combinations = (n: number, k: number): number => {
+    let result = 1;
+    for (let i = 1; i <= k; i++) result = (result * (n - k + i)) / i;
+    return result;
+  };
+  return (combinations(6, 4) * combinations(54, 2)) / combinations(60, 6);
 }

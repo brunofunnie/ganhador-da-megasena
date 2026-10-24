@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { initDb, getDb, closeDb } from './db';
 import { executeStrategy, getStrategies } from './strategies';
+import { createRng } from './rng';
 import fs from 'fs';
 import path from 'path';
 
@@ -56,5 +57,28 @@ describe('strategies', () => {
 
   it('should throw for unknown strategy', () => {
     expect(() => executeStrategy('nonexistent')).toThrow();
+  });
+
+  it('every strategy returns six unique numbers in range', () => {
+    for (const { id } of getStrategies()) {
+      const result = executeStrategy(id, { rng: createRng(`strategy-${id}`) });
+      expect(result.jogos.length).toBeGreaterThan(0);
+      for (const jogo of result.jogos) {
+        expect(jogo).toHaveLength(6);
+        expect(new Set(jogo).size).toBe(6);
+        for (const numero of jogo) {
+          const value = parseInt(numero, 10);
+          expect(value).toBeGreaterThanOrEqual(1);
+          expect(value).toBeLessThanOrEqual(60);
+        }
+      }
+    }
+  });
+
+  it('sum-target stays inside the historical interquartile range', () => {
+    const result = executeStrategy('sum-target');
+    const sum = result.jogos[0].reduce((acc, numero) => acc + parseInt(numero, 10), 0);
+    expect(sum).toBeGreaterThanOrEqual(100);
+    expect(sum).toBeLessThanOrEqual(250);
   });
 });

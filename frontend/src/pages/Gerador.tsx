@@ -1,7 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Check, Dice5, Wallet, WandSparkles, X } from 'lucide-react';
+import { Check, Dice5, FlaskConical, ShieldCheck, Wallet, WandSparkles, X } from 'lucide-react';
 import { Dialog } from '@base-ui/react/dialog';
-import { fetchGenerate, fetchSimulate, addGameToWallet, createWallet, type GenerateResponse, type SimulationResponse } from '../lib/api';
+import {
+  fetchBacktest,
+  fetchGenerate,
+  fetchSimulate,
+  addGameToWallet,
+  createWallet,
+  type BacktestResponse,
+  type GenerateResponse,
+  type SimulationResponse,
+} from '../lib/api';
 import { GameCard } from '../components/GameCard';
 import { NumberPicker } from '../components/NumberPicker';
 import { SimulationDrawer } from '../components/SimulationDrawer';
@@ -11,39 +20,51 @@ import { useStatus } from '../hooks/useStatus';
 import { nextDrawName } from '../lib/utils';
 
 const MODES = [
+  { value: 'statistical', label: 'Estatístico (features reais)' },
   { value: 'random', label: 'Aleatório Puro' },
-  { value: 'hot', label: 'Quentes (mais sorteados)' },
-  { value: 'cold', label: 'Frios (mais atrasados)' },
+  { value: 'hot', label: 'Quentes (z-score de frequência)' },
+  { value: 'cold', label: 'Frios (atraso geométrico)' },
   { value: 'balanced', label: 'Balanceado (3P-3I)' },
-  { value: 'genetic', label: 'Genético (Quentes + Frios)' },
+  { value: 'genetic', label: 'Genético (algoritmo evolutivo)' },
   { value: 'sequences', label: 'Sequências (Primos/Fibonacci)' },
-  { value: 'fechamento', label: 'Fechamento' },
+  { value: 'fechamento', label: 'Fechamento (cobertura com garantia)' },
   { value: 'dreams', label: 'Sonhos (com seed)' },
-  { value: 'trend', label: 'Tendência Temporal' },
-  { value: 'monte-carlo', label: 'Monte Carlo' },
-  { value: 'ensemble', label: 'Ensemble (voto entre estratégias)' },
-  { value: 'markov', label: 'Markov (cadeia de transição)' },
+  { value: 'trend', label: 'Tendência Temporal (z assinado)' },
+  { value: 'monte-carlo', label: 'Monte Carlo (busca de portfólio)' },
+  { value: 'ensemble', label: 'Ensemble (voto ponderado)' },
+  { value: 'markov', label: 'Markov (transição temporal)' },
 ];
 
-const ALL_STRATEGIES = ['top6', 'cold6', 'balanced-3p3i', 'quadrants', 'full-cycle', 'sum-target', 'primes-power', 'avg-frequency'] as const;
-const DEFAULT_STRATEGIES = ['top6', 'cold6', 'balanced-3p3i', 'quadrants', 'primes-power', 'avg-frequency'];
+const ALL_STRATEGIES = ['top6', 'cold6', 'balanced-3p3i', 'quadrants', 'full-cycle', 'sum-target', 'primes-power', 'avg-frequency', 'feature-conditioned'] as const;
+const DEFAULT_STRATEGIES = ['top6', 'cold6', 'balanced-3p3i', 'quadrants', 'primes-power', 'avg-frequency', 'feature-conditioned'];
 
 const fieldClass =
   'mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-800 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20 disabled:bg-slate-100';
 
 export function Gerador() {
   const queryClient = useQueryClient();
-  const [mode, setMode] = useState('random');
-  const [count, setCount] = useState(1);
+  const [mode, setMode] = useState('statistical');
+  const [count, setCount] = useState(5);
   const [fixed, setFixed] = useState('');
   const [exclude, setExclude] = useState('');
   const [seed, setSeed] = useState('');
+  const [rngSeed, setRngSeed] = useState('');
   const [iterations, setIterations] = useState(10000);
   const [strategies, setStrategies] = useState(DEFAULT_STRATEGIES.join(','));
   const [windowSize, setWindowSize] = useState(50);
+  const [poolSize, setPoolSize] = useState(8);
+  const [guarantee, setGuarantee] = useState(4);
+  const [candidates, setCandidates] = useState(400);
+  const [maxOverlap, setMaxOverlap] = useState(2);
   const [results, setResults] = useState<GenerateResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const [btWindow, setBtWindow] = useState(80);
+  const [btGames, setBtGames] = useState(5);
+  const [backtest, setBacktest] = useState<BacktestResponse | null>(null);
+  const [btLoading, setBtLoading] = useState(false);
+  const [btError, setBtError] = useState<string | null>(null);
 
   const [simMode, setSimMode] = useState('historical');
   const [randomCount, setRandomCount] = useState(1000);
@@ -60,6 +81,7 @@ export function Gerador() {
     setLoading(true);
     setError(null);
     try {
+      setBacktest(null);
       setResults(
         await fetchGenerate({
           mode,
@@ -67,9 +89,17 @@ export function Gerador() {
           fixed: fixed || undefined,
           exclude: exclude || undefined,
           seeds: seed || undefined,
+          seed: rngSeed || undefined,
           iterations: mode === 'monte-carlo' ? iterations : undefined,
           strategies: mode === 'ensemble' ? strategies : undefined,
           windowSize: mode === 'trend' ? windowSize : undefined,
+          poolSize: mode === 'fechamento' ? poolSize : undefined,
+          guarantee: mode === 'fechamento' ? guarantee : undefined,
+          candidates:
+            mode === 'statistical' || mode === 'genetic' || mode === 'monte-carlo'
+              ? candidates
+              : undefined,
+          maxOverlap: mode === 'statistical' ? maxOverlap : undefined,
         }),
       );
     } catch (err) {
@@ -78,7 +108,33 @@ export function Gerador() {
     } finally {
       setLoading(false);
     }
-    }, [mode, count, fixed, exclude, seed, iterations, strategies, windowSize]);
+    }, [mode, count, fixed, exclude, seed, rngSeed, iterations, strategies, windowSize, poolSize, guarantee, candidates, maxOverlap]);
+
+  const handleBacktest = useCallback(async () => {
+    setBtLoading(true);
+    setBtError(null);
+    try {
+      setBacktest(
+        await fetchBacktest({
+          mode,
+          window: btWindow,
+          games: btGames,
+          seed: rngSeed || `ui-${mode}`,
+          strategies: mode === 'ensemble' ? strategies : undefined,
+          windowSize: mode === 'trend' ? windowSize : undefined,
+          iterations: mode === 'monte-carlo' ? Math.min(iterations, 1500) : undefined,
+          poolSize: mode === 'fechamento' ? poolSize : undefined,
+          guarantee: mode === 'fechamento' ? guarantee : undefined,
+          candidates,
+        }),
+      );
+    } catch (err) {
+      console.error(err);
+      setBtError('Não foi possível validar este modo. Reduza a janela ou tente novamente.');
+    } finally {
+      setBtLoading(false);
+    }
+  }, [mode, btWindow, btGames, rngSeed, strategies, windowSize, iterations, poolSize, guarantee, candidates]);
 
   const handleRunSimulation = useCallback(async () => {
     if (drawerGames.length === 0) return;
@@ -204,7 +260,14 @@ export function Gerador() {
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="block text-sm font-semibold text-slate-800">
             Modo
-            <select value={mode} onChange={(event) => setMode(event.target.value)} className={fieldClass}>
+            <select
+              value={mode}
+              onChange={(event) => {
+                setMode(event.target.value);
+                setBacktest(null);
+              }}
+              className={fieldClass}
+            >
               {MODES.map((item) => (
                 <option key={item.value} value={item.value}>
                   {item.label}
@@ -271,6 +334,17 @@ export function Gerador() {
             </div>
           </div>
 
+          <label className="block text-sm font-semibold text-slate-800 sm:col-span-2">
+            Semente de geração <span className="font-normal text-slate-500">(opcional — mesma semente, mesmos jogos)</span>
+            <input
+              type="text"
+              value={rngSeed}
+              onChange={(event) => setRngSeed(event.target.value)}
+              placeholder="ex.: mega-2026"
+              className={fieldClass}
+            />
+          </label>
+
           {mode === 'dreams' && (
             <label className="block text-sm font-semibold text-slate-800 sm:col-span-2">
               Números semente
@@ -298,6 +372,69 @@ export function Gerador() {
                   className="flex-1"
                 />
                 <span className="min-w-[3rem] text-sm font-bold text-blue-700">{windowSize}</span>
+              </div>
+            </label>
+          )}
+
+          {mode === 'fechamento' && (
+            <>
+              <label className="block text-sm font-semibold text-slate-800">
+                Dezenas no pool <span className="font-normal text-slate-500">(7–12)</span>
+                <input
+                  type="number"
+                  min={7}
+                  max={12}
+                  value={poolSize}
+                  onChange={(e) => setPoolSize(Math.max(7, Math.min(12, parseInt(e.target.value) || 8)))}
+                  className={fieldClass}
+                />
+              </label>
+              <label className="block text-sm font-semibold text-slate-800">
+                Garantia <span className="font-normal text-slate-500">(se as 6 estiverem no pool)</span>
+                <input
+                  type="number"
+                  min={3}
+                  max={6}
+                  value={guarantee}
+                  onChange={(e) => setGuarantee(Math.max(3, Math.min(6, parseInt(e.target.value) || 4)))}
+                  className={fieldClass}
+                />
+              </label>
+            </>
+          )}
+
+          {(mode === 'statistical' || mode === 'genetic') && (
+            <label className="block text-sm font-semibold text-slate-800 sm:col-span-2">
+              Candidatos avaliados por jogo
+              <div className="mt-1.5 flex items-center gap-3">
+                <input
+                  type="range"
+                  min={100}
+                  max={2000}
+                  step={100}
+                  value={candidates}
+                  onChange={(e) => setCandidates(parseInt(e.target.value))}
+                  className="flex-1"
+                />
+                <span className="min-w-[4rem] text-sm font-bold text-blue-700">{candidates}</span>
+              </div>
+            </label>
+          )}
+
+          {mode === 'statistical' && (
+            <label className="block text-sm font-semibold text-slate-800 sm:col-span-2">
+              Sobreposição máxima entre jogos
+              <div className="mt-1.5 flex items-center gap-3">
+                <input
+                  type="range"
+                  min={1}
+                  max={4}
+                  step={1}
+                  value={maxOverlap}
+                  onChange={(e) => setMaxOverlap(parseInt(e.target.value))}
+                  className="flex-1"
+                />
+                <span className="min-w-[4rem] text-sm font-bold text-blue-700">{maxOverlap} dezenas</span>
               </div>
             </label>
           )}
@@ -371,7 +508,10 @@ export function Gerador() {
             <div>
               <p className="text-xs font-bold uppercase tracking-[0.12em] text-blue-600">Combinações geradas</p>
               <p className="mt-1 text-sm text-slate-500">
-                Modo: <span className="capitalize text-slate-800">{results.modo}</span>
+                Modo:{' '}
+                <span className="text-slate-800">
+                  {MODES.find((item) => item.value === results.modo)?.label ?? results.modo}
+                </span>
               </p>
             </div>
             {results.jogos.length > 1 && (
@@ -398,6 +538,118 @@ export function Gerador() {
           </div>
         </section>
       )}
+
+      <section className="surface-card p-5 shadow-sm">
+        <div className="mb-4 flex items-start gap-3">
+          <span className="rounded-xl bg-emerald-50 p-2 text-emerald-700">
+            <FlaskConical size={20} aria-hidden="true" />
+          </span>
+          <div>
+            <h2 className="font-bold text-slate-900">Validação estatística</h2>
+            <p className="text-sm text-slate-500">
+              Walk-forward: o modo gera com os dados até o concurso anterior e é comparado a jogos
+              aleatórios no mesmo sorteio. Sempre vale conferir antes de confiar em um padrão.
+            </p>
+          </div>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <label className="block text-sm font-semibold text-slate-800">
+            Concursos avaliados <span className="font-normal text-slate-500">(10–300)</span>
+            <input
+              type="number"
+              min={10}
+              max={300}
+              value={btWindow}
+              onChange={(e) => setBtWindow(Math.max(10, Math.min(300, parseInt(e.target.value) || 80)))}
+              className={fieldClass}
+            />
+          </label>
+          <label className="block text-sm font-semibold text-slate-800">
+            Jogos por concurso <span className="font-normal text-slate-500">(1–10)</span>
+            <input
+              type="number"
+              min={1}
+              max={10}
+              value={btGames}
+              onChange={(e) => setBtGames(Math.max(1, Math.min(10, parseInt(e.target.value) || 5)))}
+              className={fieldClass}
+            />
+          </label>
+        </div>
+
+        {btError && (
+          <p role="alert" className="mt-4 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+            {btError}
+          </p>
+        )}
+
+        <button
+          onClick={handleBacktest}
+          disabled={btLoading}
+          className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-emerald-700 px-5 py-3 font-bold text-emerald-800 transition hover:bg-emerald-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700 disabled:cursor-not-allowed disabled:border-slate-300 disabled:text-slate-400"
+        >
+          <ShieldCheck size={18} aria-hidden="true" />
+          {btLoading ? 'Validando contra o histórico...' : 'Validar este modo contra o histórico'}
+        </button>
+
+        {backtest && (
+          <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <span
+                className={`rounded-full px-2.5 py-1 text-xs font-bold ${
+                  backtest.significant
+                    ? 'bg-amber-100 text-amber-900'
+                    : 'bg-emerald-100 text-emerald-900'
+                }`}
+              >
+                {backtest.significant ? 'Diferença significativa nesta janela' : 'Sem diferença confiável do acaso'}
+              </span>
+              <span className="text-xs text-slate-500">
+                modo <strong className="text-slate-700">{backtest.mode}</strong> · {backtest.targets}{' '}
+                concursos · {backtest.gamesPerDraw} jogos por concurso · semente{' '}
+                <code className="font-mono">{backtest.seed}</code>
+              </span>
+            </div>
+
+            <dl className="mt-4 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
+              <div className="rounded-xl bg-white p-3 shadow-sm">
+                <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Média de acertos (modo)</dt>
+                <dd className="mt-1 text-xl font-bold text-slate-900">{backtest.strategy.meanHits.toFixed(3)}</dd>
+              </div>
+              <div className="rounded-xl bg-white p-3 shadow-sm">
+                <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Média de acertos (aleatório)</dt>
+                <dd className="mt-1 text-xl font-bold text-slate-900">{backtest.baseline.meanHits.toFixed(3)}</dd>
+              </div>
+              <div className="rounded-xl bg-white p-3 shadow-sm">
+                <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Diferença (IC 95%)</dt>
+                <dd className="mt-1 text-xl font-bold text-slate-900">
+                  {backtest.delta.meanHits >= 0 ? '+' : ''}
+                  {backtest.delta.meanHits.toFixed(3)}
+                </dd>
+                <dd className="text-xs text-slate-500">
+                  [{backtest.delta.meanHitsCI95[0].toFixed(3)}; {backtest.delta.meanHitsCI95[1].toFixed(3)}]
+                </dd>
+              </div>
+              <div className="rounded-xl bg-white p-3 shadow-sm">
+                <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Quadra ou mais</dt>
+                <dd className="mt-1 text-xl font-bold text-slate-900">
+                  {backtest.strategy.distribution.atLeast4}
+                </dd>
+                <dd className="text-xs text-slate-500">
+                  modo vs {backtest.baseline.distribution.atLeast4} no aleatório
+                </dd>
+              </div>
+            </dl>
+
+            <p className="mt-3 text-xs leading-5 text-slate-500">{backtest.note}</p>
+            <p className="mt-2 text-xs leading-5 text-slate-400">
+              Um jogo tem 0,6 acerto esperado e 1 chance em 2.332 de quadra. O teste mede desvio em
+              relação a isso — não existe método que aumente a chance de 6 acertos.
+            </p>
+          </div>
+        )}
+      </section>
 
       <SimulationDrawer
         open={drawerOpen}

@@ -183,8 +183,63 @@ describe('generators', () => {
     expect(GENERATOR_MODES).toContain('fechamento');
     expect(GENERATOR_MODES).toContain('dreams');
     expect(GENERATOR_MODES).toContain('trend');
+    expect(GENERATOR_MODES).toContain('statistical');
     expect(GENERATOR_MODES).toContain('monte-carlo');
     expect(GENERATOR_MODES).toContain('ensemble');
     expect(GENERATOR_MODES).toContain('markov');
+  });
+
+  it('every mode honors fixed/excluded numbers and produces valid tickets', () => {
+    for (const mode of GENERATOR_MODES) {
+      const games = generateNumbers({
+        mode,
+        count: 2,
+        fixedNumbers: ['01'],
+        excludeNumbers: ['60'],
+        seedNumbers: ['07', '13'],
+        seed: `invariant-${mode}`,
+        iterations: 200,
+        candidates: 80,
+        poolSize: 8,
+        guarantee: 4,
+      });
+
+      expect(games.length).toBeGreaterThan(0);
+      for (const game of games) {
+        expect(game).toHaveLength(6);
+        expect(new Set(game).size).toBe(6);
+        expect(game).toContain('01');
+        expect(game).not.toContain('60');
+        for (const numero of game) {
+          const value = parseInt(numero, 10);
+          expect(value).toBeGreaterThanOrEqual(1);
+          expect(value).toBeLessThanOrEqual(60);
+        }
+      }
+    }
+  });
+
+  it('is reproducible when a seed is provided', () => {
+    const first = generateNumbers({ mode: 'statistical', count: 5, seed: 'repro', candidates: 80 });
+    const second = generateNumbers({ mode: 'statistical', count: 5, seed: 'repro', candidates: 80 });
+    expect(first).toEqual(second);
+  });
+
+  it('rejects invalid numbers', () => {
+    expect(() => generateNumbers({ mode: 'random', count: 1, fixedNumbers: ['61'] })).toThrow();
+    expect(() =>
+      generateNumbers({ mode: 'random', count: 1, fixedNumbers: ['01', '02', '03', '04', '05', '06', '07'] })
+    ).toThrow();
+  });
+
+  it('keeps overlap between tickets under control', () => {
+    const games = generateNumbers({ mode: 'hot', count: 10, seed: 'diversity', maxOverlap: 2 });
+    expect(games).toHaveLength(10);
+    for (let i = 0; i < games.length; i++) {
+      for (let j = i + 1; j < games.length; j++) {
+        const overlap = games[i].filter((numero) => games[j].includes(numero)).length;
+        expect(overlap).toBeLessThanOrEqual(2);
+      }
+    }
   });
 });
